@@ -18,7 +18,6 @@ const Library: React.FC = () => {
         return;
       }
 
-      // RLS handles the privacy here - you only see what you own
       const { data, error } = await supabase
         .from('images')
         .select('*')
@@ -41,34 +40,30 @@ const Library: React.FC = () => {
 
     setDeletingId(image.id);
     try {
-      // 1. Parse the storage path from the URL
-      // Expected URL: .../storage/v1/object/public/images/USER_ID/FILENAME.jpg
       let storagePath = '';
       try {
         const url = new URL(image.url);
-        const pathSegments = url.pathname.split('/');
-        const imagesIdx = pathSegments.indexOf('images');
-        if (imagesIdx !== -1) {
-          storagePath = pathSegments.slice(imagesIdx + 1).join('/');
+        // Path logic for Supabase Storage URLs
+        const segments = url.pathname.split('/images/');
+        if (segments.length > 1) {
+          storagePath = segments[1];
+        } else {
+          // Fallback parsing for different CDN formats
+          const parts = url.pathname.split('/');
+          const imagesIdx = parts.indexOf('images');
+          if (imagesIdx !== -1) {
+            storagePath = parts.slice(imagesIdx + 1).join('/');
+          }
         }
       } catch (e) {
-        console.warn("Could not parse storage path via URL object, falling back to split.");
         const parts = image.url.split('/images/');
         if (parts.length > 1) storagePath = parts[1];
       }
 
-      // 2. Delete from Supabase Storage if path was found
       if (storagePath) {
-        const { error: storageError } = await supabase.storage
-          .from('images')
-          .remove([storagePath]);
-
-        if (storageError) {
-          console.warn('Storage file deletion warning:', storageError.message);
-        }
+        await supabase.storage.from('images').remove([storagePath]);
       }
 
-      // 3. Delete from Database (Always do this even if storage fails to keep DB clean)
       const { error: dbError } = await supabase
         .from('images')
         .delete()
@@ -76,7 +71,6 @@ const Library: React.FC = () => {
 
       if (dbError) throw dbError;
 
-      // 4. Update UI
       setImages(prev => prev.filter(img => img.id !== image.id));
     } catch (error: any) {
       console.error('Error deleting image:', error);
@@ -130,7 +124,7 @@ const Library: React.FC = () => {
                     src={image.url} 
                     alt={image.name} 
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400?text=Bucket+Not+Found';
+                      (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400?text=File+Not+Found+On+Server';
                     }}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
                   />
@@ -141,7 +135,6 @@ const Library: React.FC = () => {
                     </span>
                   </div>
                   
-                  {/* Deleting Overlay */}
                   {deletingId === image.id && (
                     <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center text-white">
                       <i className="fa-solid fa-circle-notch animate-spin text-2xl mb-2"></i>

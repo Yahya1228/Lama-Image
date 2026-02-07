@@ -16,12 +16,10 @@ const ImageCompressor: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Initial check
     supabase.auth.getSession().then(({ data: { session } }) => {
       setIsLoggedIn(!!session);
     });
 
-    // Listen for changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session);
     });
@@ -83,29 +81,31 @@ const ImageCompressor: React.FC = () => {
     setIsSaving(true);
     
     try {
-      // Re-verify session to get fresh user ID
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session?.user) {
-        throw new Error("You must be logged in to save images to the cloud.");
+        throw new Error("You must be logged in to save images.");
       }
 
       const user = session.user;
-      console.log('Attempting save for user:', user.id);
+      
+      // Strict naming convention: images/USER_ID/TIMESTAMP_FILENAME
+      const cleanFileName = selectedFile.name.replace(/[^a-zA-Z0-9.]/g, '_');
+      const filePath = `${user.id}/${Date.now()}_${cleanFileName}`;
 
       // 1. Upload to Supabase Storage
-      const fileExt = selectedFile.name.split('.').pop();
-      const fileName = `${Date.now()}_${selectedFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-      const filePath = `${user.id}/${fileName}`;
-
       const { error: uploadError } = await supabase.storage
         .from('images')
         .upload(filePath, compressedBlob, {
           cacheControl: '3600',
-          upsert: false
+          upsert: false,
+          contentType: 'image/jpeg'
         });
 
       if (uploadError) {
-        throw new Error(`Cloud Storage Error: ${uploadError.message}`);
+        if (uploadError.message.includes('Bucket not found')) {
+          throw new Error("Critical: The 'images' bucket does not exist in your Supabase Storage. Please create it first.");
+        }
+        throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
       // 2. Get Public URL
@@ -124,9 +124,8 @@ const ImageCompressor: React.FC = () => {
       }]);
 
       if (dbError) {
-        // If DB fails, try to cleanup the storage file
         await supabase.storage.from('images').remove([filePath]);
-        throw new Error(`Database Error: ${dbError.message}. Ensure you have run the RLS SQL fix.`);
+        throw new Error(`Database Error: ${dbError.message}`);
       }
 
       setIsSaved(true);
