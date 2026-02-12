@@ -1,12 +1,26 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import ImageCompressor from '../components/ImageCompressor';
 import ImageEnhancer from '../components/ImageEnhancer';
 import { Feature, Testimonial } from '../types';
 
 const Home: React.FC = () => {
   const [activeTool, setActiveTool] = useState<'none' | 'compress' | 'enhance'>('none');
+  const [searchParams] = useSearchParams();
   const toolRef = useRef<HTMLDivElement>(null);
+
+  // Handle deep-linking from URL parameters (e.g., /?tool=compress)
+  useEffect(() => {
+    const toolParam = searchParams.get('tool');
+    if (toolParam === 'compress' || toolParam === 'enhance') {
+      setActiveTool(toolParam as 'compress' | 'enhance');
+      // Delay slightly to ensure the component has rendered the tool area before scrolling
+      setTimeout(() => {
+        toolRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+    }
+  }, [searchParams]);
 
   const scrollToTool = (tool: 'compress' | 'enhance') => {
     setActiveTool(tool);
