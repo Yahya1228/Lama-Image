@@ -69,15 +69,15 @@ const Home: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
             <button 
               onClick={() => scrollToTool('compress')}
-              className="group w-full sm:w-auto px-10 py-4 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-2xl shadow-xl shadow-primary-500/20 flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+              className="group w-full sm:w-auto px-10 py-4 bg-primary-600 hover:bg-primary-700 text-white font-black rounded-2xl shadow-xl shadow-primary-500/20 hover:shadow-primary-500/40 flex items-center justify-center transition-all hover:scale-105 hover:-translate-y-1 active:scale-95"
             >
-              <i className="fa-solid fa-compress mr-2 opacity-80 group-hover:opacity-100"></i> Compress Image
+              <i className="fa-solid fa-compress mr-2 opacity-80 group-hover:opacity-100 transition-opacity"></i> Compress Image
             </button>
             <button 
               onClick={() => scrollToTool('enhance')}
-              className="w-full sm:w-auto px-10 py-4 bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 font-bold rounded-2xl shadow-sm flex items-center justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95"
+              className="group w-full sm:w-auto px-10 py-4 bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 font-black rounded-2xl shadow-sm hover:shadow-xl hover:shadow-amber-500/10 flex items-center justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-750 hover:scale-105 hover:-translate-y-1 active:scale-95"
             >
-              <i className="fa-solid fa-wand-magic-sparkles mr-2 text-amber-500"></i> AI Enhancer
+              <i className="fa-solid fa-wand-magic-sparkles mr-2 text-amber-500 group-hover:rotate-12 transition-transform"></i> AI Enhancer
             </button>
           </div>
         </div>
@@ -91,13 +91,13 @@ const Home: React.FC = () => {
               <div className="bg-slate-100 dark:bg-slate-800 p-1.5 rounded-[22px] inline-flex border border-slate-200 dark:border-slate-700 shadow-inner">
                 <button 
                   onClick={() => setActiveTool('compress')}
-                  className={`px-8 py-2.5 rounded-[18px] text-sm font-bold transition-all ${activeTool === 'compress' ? 'bg-white dark:bg-slate-700 shadow-sm text-primary-600 dark:text-primary-400' : 'text-slate-500'}`}
+                  className={`px-8 py-2.5 rounded-[18px] text-sm font-bold transition-all ${activeTool === 'compress' ? 'bg-white dark:bg-slate-700 shadow-sm text-primary-600 dark:text-primary-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                 >
                   Compress
                 </button>
                 <button 
                   onClick={() => setActiveTool('enhance')}
-                  className={`px-8 py-2.5 rounded-[18px] text-sm font-bold transition-all ${activeTool === 'enhance' ? 'bg-white dark:bg-slate-700 shadow-sm text-amber-500' : 'text-slate-500'}`}
+                  className={`px-8 py-2.5 rounded-[18px] text-sm font-bold transition-all ${activeTool === 'enhance' ? 'bg-white dark:bg-slate-700 shadow-sm text-amber-500' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                 >
                   Enhance
                 </button>
@@ -129,8 +129,8 @@ const Home: React.FC = () => {
                 <div className="flex flex-col items-center text-center flex-1">
                   <div className="relative mb-10 group">
                     {/* Icon Squircle Container */}
-                    <div className="w-32 h-32 bg-primary-50/50 dark:bg-primary-900/10 rounded-[38px] flex items-center justify-center border border-primary-100/50 dark:border-primary-800/20 shadow-sm transition-transform duration-500 group-hover:scale-105 group-hover:bg-primary-100/60">
-                      <i className={`fa-solid ${item.icon} text-4xl text-primary-600 dark:text-primary-400`}></i>
+                    <div className="w-32 h-32 bg-primary-50/50 dark:bg-primary-900/10 rounded-[38px] flex items-center justify-center border border-primary-100/50 dark:border-primary-800/20 shadow-sm transition-all duration-500 group-hover:scale-105 group-hover:bg-primary-100/60 group-hover:shadow-xl group-hover:shadow-primary-500/10">
+                      <i className={`fa-solid ${item.icon} text-4xl text-primary-600 dark:text-primary-400 group-hover:scale-110 transition-transform`}></i>
                     </div>
                     {/* Step Badge */}
                     <div className="absolute -top-3 -right-3 w-12 h-12 bg-white dark:bg-slate-800 rounded-full border border-slate-100 dark:border-slate-700 shadow-xl flex items-center justify-center">
@@ -170,8 +170,8 @@ const Home: React.FC = () => {
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 text-left">
             {features.map((feature) => (
-              <div key={feature.id} className="p-8 bg-white dark:bg-slate-800 rounded-[32px] border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-xl transition-all hover:-translate-y-1">
-                <div className="w-14 h-14 bg-primary-50 dark:bg-primary-900/20 rounded-2xl flex items-center justify-center mb-6">
+              <div key={feature.id} className="p-8 bg-white dark:bg-slate-800 rounded-[32px] border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-2xl hover:shadow-primary-500/10 transition-all hover:-translate-y-1 group">
+                <div className="w-14 h-14 bg-primary-50 dark:bg-primary-900/20 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                   <i className={`fa-solid ${feature.icon} text-primary-500 text-xl`}></i>
                 </div>
                 <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-3">{feature.title}</h4>
@@ -192,8 +192,8 @@ const Home: React.FC = () => {
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {testimonials.map((t) => (
-              <div key={t.id} className="bg-slate-50 dark:bg-slate-800/50 p-10 rounded-[32px] border border-slate-100 dark:border-slate-700 hover:shadow-xl transition-all">
-                <div className="flex items-center space-x-1 mb-8 text-amber-400">
+              <div key={t.id} className="bg-slate-50 dark:bg-slate-800/50 p-10 rounded-[32px] border border-slate-100 dark:border-slate-700 hover:shadow-2xl hover:shadow-primary-500/5 transition-all group">
+                <div className="flex items-center space-x-1 mb-8 text-amber-400 group-hover:scale-105 transition-transform origin-left">
                   <i className="fa-solid fa-star text-sm"></i>
                   <i className="fa-solid fa-star text-sm"></i>
                   <i className="fa-solid fa-star text-sm"></i>
@@ -202,7 +202,7 @@ const Home: React.FC = () => {
                 </div>
                 <p className="text-slate-600 dark:text-slate-300 italic mb-10 leading-relaxed font-serif text-lg">"{t.content}"</p>
                 <div className="flex items-center space-x-4">
-                  <img src={t.avatar} alt={t.name} className="w-14 h-14 rounded-full border-2 border-primary-100" />
+                  <img src={t.avatar} alt={t.name} className="w-14 h-14 rounded-full border-2 border-primary-100 group-hover:border-primary-400 transition-all" />
                   <div>
                     <h5 className="font-bold text-slate-900 dark:text-white leading-tight">{t.name}</h5>
                     <p className="text-sm text-slate-500 font-medium">{t.role}</p>

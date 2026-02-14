@@ -18,9 +18,9 @@ const NotFound: React.FC = () => {
         </p>
         <Link 
           to="/" 
-          className="inline-flex items-center px-8 py-3 bg-primary-600 text-white font-bold rounded-xl shadow-lg shadow-primary-500/20 transition-all hover:-translate-y-1"
+          className="group inline-flex items-center px-8 py-4 bg-primary-600 text-white font-black rounded-xl shadow-lg shadow-primary-500/20 transition-all hover:shadow-2xl hover:shadow-primary-500/40 hover:scale-105 hover:-translate-y-1 active:scale-95"
         >
-          <i className="fa-solid fa-house mr-2"></i> Back to Homepage
+          <i className="fa-solid fa-house mr-3 group-hover:animate-bounce"></i> Back to Homepage
         </Link>
       </div>
     </div>

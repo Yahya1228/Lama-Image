@@ -59,7 +59,7 @@ const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
             <Link to="/" className="flex items-center space-x-2 group">
-              <div className="w-10 h-10 bg-gradient-to-tr from-primary-600 to-sky-400 rounded-xl flex items-center justify-center shadow-lg shadow-primary-500/20 group-hover:scale-110 transition-transform">
+              <div className="w-10 h-10 bg-gradient-to-tr from-primary-600 to-sky-400 rounded-xl flex items-center justify-center shadow-lg shadow-primary-500/20 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
                 <i className="fa-solid fa-image text-white text-xl"></i>
               </div>
               <span className="text-2xl font-black tracking-tighter text-slate-800 dark:text-white">
@@ -74,13 +74,14 @@ const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
                   <Link
                     key={link.path}
                     to={link.path}
-                    className={`text-sm font-medium transition-colors ${
+                    className={`text-sm font-bold transition-all relative group/link ${
                       isActive(link.path)
                         ? 'text-primary-600 dark:text-primary-400'
                         : 'text-slate-600 dark:text-slate-400 hover:text-primary-500 dark:hover:text-primary-300'
                     }`}
                   >
                     {link.name}
+                    <span className={`absolute -bottom-1 left-0 h-0.5 bg-primary-500 transition-all duration-300 ${isActive(link.path) ? 'w-full' : 'w-0 group-hover/link:w-full'}`}></span>
                   </Link>
                 ))}
               </div>
@@ -88,7 +89,7 @@ const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
               <div className="flex items-center space-x-4">
                 <button
                   onClick={toggleTheme}
-                  className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-colors mr-2"
+                  className="p-2.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all hover:rotate-12 active:scale-90"
                   aria-label="Toggle theme"
                 >
                   {theme === 'light' ? (
@@ -100,12 +101,12 @@ const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
 
                 {isLoggedIn ? (
                   <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-primary-500">
-                      <i className="fa-solid fa-user text-sm"></i>
+                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-primary-500 shadow-inner group cursor-pointer hover:border-primary-400 transition-all">
+                      <i className="fa-solid fa-user text-sm group-hover:scale-110 transition-transform"></i>
                     </div>
                     <button 
                       onClick={logout}
-                      className="text-xs font-black uppercase tracking-widest text-red-500 hover:text-red-600 transition-colors"
+                      className="text-xs font-black uppercase tracking-widest text-red-500 hover:text-red-600 hover:scale-105 transition-all active:scale-95"
                     >
                       Logout
                     </button>
@@ -114,13 +115,13 @@ const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
                   <>
                     <button 
                       onClick={() => openAuth('login')}
-                      className="text-sm font-bold text-slate-600 dark:text-slate-400 hover:text-primary-500 transition-colors"
+                      className="text-sm font-bold text-slate-600 dark:text-slate-400 hover:text-primary-500 transition-all hover:translate-y-[-1px] active:scale-95 px-2"
                     >
                       Login
                     </button>
                     <button 
                       onClick={() => openAuth('signup')}
-                      className="bg-primary-600 hover:bg-primary-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-primary-500/20 active:scale-95"
+                      className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-primary-500/20 hover:shadow-primary-500/40 hover:-translate-y-0.5 active:scale-95"
                     >
                       Sign Up
                     </button>
@@ -133,13 +134,13 @@ const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
             <div className="md:hidden flex items-center space-x-4">
                <button
                 onClick={toggleTheme}
-                className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-colors"
+                className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all"
               >
                 {theme === 'light' ? <i className="fa-solid fa-moon"></i> : <i className="fa-solid fa-sun"></i>}
               </button>
               <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="text-slate-600 dark:text-slate-400 hover:text-primary-500 transition-colors"
+                className="text-slate-600 dark:text-slate-400 hover:text-primary-500 transition-all active:scale-90"
               >
                 <i className={`fa-solid ${isOpen ? 'fa-xmark' : 'fa-bars'} text-2xl`}></i>
               </button>
@@ -156,7 +157,7 @@ const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
                   key={link.path}
                   to={link.path}
                   onClick={() => setIsOpen(false)}
-                  className={`block px-3 py-4 rounded-lg text-base font-medium ${
+                  className={`block px-3 py-4 rounded-lg text-base font-medium transition-all active:bg-slate-100 ${
                     isActive(link.path)
                       ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
                       : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-primary-500'
@@ -170,7 +171,7 @@ const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
                 {isLoggedIn ? (
                   <button 
                     onClick={logout}
-                    className="w-full py-4 text-center font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
+                    className="w-full py-4 text-center font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all active:scale-95"
                   >
                     Logout
                   </button>
@@ -178,13 +179,13 @@ const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
                   <>
                     <button 
                       onClick={() => openAuth('login')}
-                      className="w-full py-4 text-center font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                      className="w-full py-4 text-center font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-all active:scale-95"
                     >
                       Login
                     </button>
                     <button 
                       onClick={() => openAuth('signup')}
-                      className="w-full py-4 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl shadow-lg shadow-primary-500/20 transition-all"
+                      className="w-full py-4 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl shadow-lg shadow-primary-500/20 transition-all active:scale-[0.98]"
                     >
                       Sign Up Free
                     </button>

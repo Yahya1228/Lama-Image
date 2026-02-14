@@ -209,7 +209,7 @@ const ImageEnhancer: React.FC = () => {
             accept="image/*" 
             onChange={handleFileChange} 
           />
-          <div className="w-20 h-20 bg-amber-50 dark:bg-amber-900/20 rounded-3xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-500">
+          <div className="w-20 h-20 bg-amber-50 dark:bg-amber-900/20 rounded-3xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
             <i className="fa-solid fa-wand-magic-sparkles text-amber-500 text-3xl"></i>
           </div>
           <p className="text-xl text-slate-700 dark:text-slate-300 font-black mb-2">Enhance low-res photos</p>
@@ -246,7 +246,7 @@ const ImageEnhancer: React.FC = () => {
             
             <button 
               onClick={clear}
-              className="absolute top-4 right-4 z-40 w-11 h-11 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all shadow-xl border border-slate-100 dark:border-slate-700"
+              className="absolute top-4 right-4 z-40 w-11 h-11 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all shadow-xl border border-slate-100 dark:border-slate-700 hover:scale-110 active:scale-90"
             >
               <i className="fa-solid fa-trash-can text-lg"></i>
             </button>
@@ -293,9 +293,10 @@ const ImageEnhancer: React.FC = () => {
           {!isDone && !isProcessing && (
             <button 
               onClick={handleEnhance}
-              className="group w-full bg-amber-500 hover:bg-amber-600 text-white font-black py-5 rounded-[24px] shadow-2xl shadow-amber-500/30 transition-all active:scale-[0.98] flex items-center justify-center space-x-3"
+              className="group w-full bg-amber-500 hover:bg-amber-600 text-white font-black py-5 rounded-[24px] shadow-2xl shadow-amber-500/30 transition-all hover:scale-[1.02] hover:-translate-y-1 active:scale-[0.98] flex items-center justify-center space-x-3 overflow-hidden relative"
             >
-              <i className="fa-solid fa-wand-magic-sparkles text-sm group-hover:rotate-12 transition-transform"></i>
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+              <i className="fa-solid fa-wand-magic-sparkles text-sm group-hover:rotate-45 transition-transform duration-500"></i>
               <span>Run AI Detail Recovery</span>
             </button>
           )}
@@ -329,15 +330,16 @@ const ImageEnhancer: React.FC = () => {
                 <div className="flex gap-4">
                   <button 
                     onClick={clear}
-                    className="px-7 py-5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-black rounded-[24px] border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-all active:scale-95"
+                    className="px-7 py-5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-black rounded-[24px] border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-all hover:scale-105 active:scale-95"
                   >
                     <i className="fa-solid fa-arrow-rotate-left"></i>
                   </button>
                   <a 
                     href={enhancedUrl!} 
                     download={`lama_enhanced_${selectedFile.name}`}
-                    className="flex-grow text-center bg-primary-600 hover:bg-primary-700 text-white font-black py-5 rounded-[24px] transition-all shadow-2xl shadow-primary-500/30 active:scale-[0.98] flex items-center justify-center space-x-3"
+                    className="flex-grow text-center bg-primary-600 hover:bg-primary-700 text-white font-black py-5 rounded-[24px] transition-all shadow-2xl shadow-primary-500/30 hover:shadow-primary-500/50 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center space-x-3 overflow-hidden relative"
                   >
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-1000"></div>
                     <i className="fa-solid fa-circle-down"></i>
                     <span>Download HD Image</span>
                   </a>
@@ -347,7 +349,7 @@ const ImageEnhancer: React.FC = () => {
                   <button 
                     onClick={handleSaveToLibrary}
                     disabled={isSaved || isSaving}
-                    className={`w-full py-4 rounded-[20px] font-black text-sm transition-all flex items-center justify-center space-x-2 ${isSaved ? 'bg-green-100 text-green-600 cursor-default' : 'bg-slate-800 dark:bg-slate-700 text-white hover:bg-slate-900 shadow-xl'}`}
+                    className={`w-full py-4 rounded-[20px] font-black text-sm transition-all flex items-center justify-center space-x-2 ${isSaved ? 'bg-green-100 text-green-600 cursor-default' : 'bg-slate-800 dark:bg-slate-700 text-white hover:bg-slate-900 hover:scale-[1.01] active:scale-95 shadow-xl'}`}
                   >
                     {isSaving ? (
                       <i className="fa-solid fa-circle-notch animate-spin"></i>
