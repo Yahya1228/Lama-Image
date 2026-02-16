@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import Header from './components/Header';
@@ -7,6 +8,7 @@ import Blog from './pages/Blog';
 import About from './pages/About';
 import Contact from './pages/Contact';
 import Library from './pages/Library';
+import AdminReviews from './pages/AdminReviews';
 import NotFound from './pages/NotFound';
 import Post1 from './pages/blog/Post1';
 import Post2 from './pages/blog/Post2';
@@ -53,6 +55,7 @@ const App: React.FC = () => {
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/library" element={<Library />} />
+            <Route path="/admin/reviews" element={<AdminReviews />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>

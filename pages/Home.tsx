@@ -1,26 +1,80 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import ImageCompressor from '../components/ImageCompressor';
 import ImageEnhancer from '../components/ImageEnhancer';
-import { Feature, Testimonial } from '../types';
+import ReviewCard from '../components/ReviewCard';
+import ReviewForm from '../components/ReviewForm';
+import { Feature, Review } from '../types';
+import { supabase } from '../lib/supabase';
 
 const Home: React.FC = () => {
   const [activeTool, setActiveTool] = useState<'none' | 'compress' | 'enhance'>('none');
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [searchParams] = useSearchParams();
   const toolRef = useRef<HTMLDivElement>(null);
 
-  // Handle deep-linking from URL parameters (e.g., /?tool=compress)
+  const curatedReviews: Review[] = [
+    { id: 'c1', name: 'Sarah Jenkins', rating: 5, comment: 'LamaImage has completely replaced my expensive desktop tools for quick web exports. The compression is magic!', approved: true, created_at: new Date().toISOString() },
+    { id: 'c2', name: 'Mark Wu', rating: 5, comment: 'I needed a quick way to optimize assets for a client site. This tool saved me hours and the results were flawless.', approved: true, created_at: new Date().toISOString() },
+    { id: 'c3', name: 'Elena Rodriguez', rating: 5, comment: 'The AI enhancer actually works! I recovered a blurry shot that I thought was unusable. Amazing service.', approved: true, created_at: new Date().toISOString() },
+  ];
+
+  const fetchApprovedReviews = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('reviews')
+        .select('*')
+        .eq('approved', true)
+        .order('created_at', { ascending: false })
+        .limit(6);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        setReviews(data as Review[]);
+      } else {
+        setReviews(curatedReviews);
+      }
+    } catch (err) {
+      console.error('Error fetching reviews:', err);
+      setReviews(curatedReviews);
+    }
+  };
+
+  useEffect(() => {
+    fetchApprovedReviews();
+
+    const channel = supabase
+      .channel('public:reviews')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'reviews' }, 
+        (payload) => {
+          fetchApprovedReviews();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   useEffect(() => {
     const toolParam = searchParams.get('tool');
     if (toolParam === 'compress' || toolParam === 'enhance') {
       setActiveTool(toolParam as 'compress' | 'enhance');
-      // Delay slightly to ensure the component has rendered the tool area before scrolling
       setTimeout(() => {
         toolRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 300);
     }
   }, [searchParams]);
+
+  const handleNewReview = (newReview: Review) => {
+    setReviews(prev => [newReview, ...prev].slice(0, 6));
+    const reviewsSection = document.getElementById('reviews-section');
+    reviewsSection?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   const scrollToTool = (tool: 'compress' | 'enhance') => {
     setActiveTool(tool);
@@ -34,12 +88,6 @@ const Home: React.FC = () => {
     { id: '2', title: 'High Quality Output', description: 'Zero compromise on quality. Our AI preserves every vital detail.', icon: 'fa-gem' },
     { id: '3', title: 'Mobile Friendly', description: 'Process images on the go from any smartphone or tablet browser.', icon: 'fa-mobile-screen' },
     { id: '4', title: 'Privacy Focused', description: 'Your images are processed locally or deleted immediately after.', icon: 'fa-shield-halved' },
-  ];
-
-  const testimonials: Testimonial[] = [
-    { id: '1', name: 'Sarah Jenkins', role: 'Photographer', content: 'LamaImage has completely replaced my expensive desktop tools for quick web exports. The compression is magic!', avatar: 'https://picsum.photos/100/100?random=1' },
-    { id: '2', name: 'Mark Wu', role: 'Web Dev', content: 'I needed a quick way to optimize assets for a client site. This tool saved me hours and the results were flawless.', avatar: 'https://picsum.photos/100/100?random=2' },
-    { id: '3', name: 'Elena Rodriguez', role: 'Content Creator', content: 'The AI enhancer actually works! I recovered a blurry shot that I thought was unusable. Amazing service.', avatar: 'https://picsum.photos/100/100?random=3' },
   ];
 
   return (
@@ -69,8 +117,9 @@ const Home: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
             <button 
               onClick={() => scrollToTool('compress')}
-              className="group w-full sm:w-auto px-10 py-4 bg-primary-600 hover:bg-primary-700 text-white font-black rounded-2xl shadow-xl shadow-primary-500/20 hover:shadow-primary-500/40 flex items-center justify-center transition-all hover:scale-105 hover:-translate-y-1 active:scale-95"
+              className="group w-full sm:w-auto px-10 py-4 bg-primary-600 hover:bg-primary-700 text-white font-black rounded-2xl shadow-xl shadow-primary-500/20 hover:shadow-primary-500/40 flex items-center justify-center transition-all hover:scale-105 hover:-translate-y-1 active:scale-95 overflow-hidden relative"
             >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
               <i className="fa-solid fa-compress mr-2 opacity-80 group-hover:opacity-100 transition-opacity"></i> Compress Image
             </button>
             <button 
@@ -108,10 +157,10 @@ const Home: React.FC = () => {
         </section>
       )}
 
-      {/* How it Works - Ultimate Professional Aesthetic */}
-      <section className="py-24 bg-white dark:bg-slate-900">
+      {/* How it Works Section */}
+      <section className="py-24 bg-slate-50 dark:bg-slate-900/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-24">
+          <div className="text-center mb-20">
             <h2 className="text-4xl lg:text-5xl font-black text-slate-900 dark:text-white mb-6">How It Works</h2>
             <p className="max-w-2xl mx-auto text-slate-500 dark:text-slate-400 text-lg">
               Experience professional-grade image processing in three simple steps.
@@ -122,19 +171,17 @@ const Home: React.FC = () => {
           <div className="flex flex-col lg:flex-row items-start justify-between gap-12 lg:gap-0 max-w-6xl mx-auto">
             {[
               { step: '01', title: 'Upload Image', desc: 'Drag and drop your photos directly into our processing tool.', icon: 'fa-cloud-arrow-up' },
-              { step: '02', title: 'Compress or Enhance', desc: 'Select between high-ratio compression or AI-powered detail enhancement.', icon: 'fa-gears' },
-              { step: '03', title: 'Download Image', desc: 'Download your optimized image in seconds with zero loss in quality.', icon: 'fa-circle-down' },
+              { step: '02', title: 'AI Process', desc: 'Select between high-ratio compression or AI-powered detail enhancement.', icon: 'fa-gears' },
+              { step: '03', title: 'Done!', desc: 'Download your optimized image in seconds with zero loss in quality.', icon: 'fa-circle-down' },
             ].map((item, idx) => (
               <React.Fragment key={idx}>
                 <div className="flex flex-col items-center text-center flex-1">
                   <div className="relative mb-10 group">
-                    {/* Icon Squircle Container */}
-                    <div className="w-32 h-32 bg-primary-50/50 dark:bg-primary-900/10 rounded-[38px] flex items-center justify-center border border-primary-100/50 dark:border-primary-800/20 shadow-sm transition-all duration-500 group-hover:scale-105 group-hover:bg-primary-100/60 group-hover:shadow-xl group-hover:shadow-primary-500/10">
+                    <div className="w-32 h-32 bg-white dark:bg-slate-800 rounded-[38px] flex items-center justify-center border border-slate-100 dark:border-slate-700 shadow-sm transition-all duration-500 group-hover:scale-105 group-hover:shadow-xl group-hover:shadow-primary-500/10">
                       <i className={`fa-solid ${item.icon} text-4xl text-primary-600 dark:text-primary-400 group-hover:scale-110 transition-transform`}></i>
                     </div>
-                    {/* Step Badge */}
-                    <div className="absolute -top-3 -right-3 w-12 h-12 bg-white dark:bg-slate-800 rounded-full border border-slate-100 dark:border-slate-700 shadow-xl flex items-center justify-center">
-                      <span className="text-sm font-black text-slate-400">{item.step}</span>
+                    <div className="absolute -top-3 -right-3 w-12 h-12 bg-primary-600 rounded-full border-4 border-white dark:border-slate-800 shadow-xl flex items-center justify-center">
+                      <span className="text-sm font-black text-white">{item.step}</span>
                     </div>
                   </div>
                   <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-4 leading-tight">{item.title}</h3>
@@ -142,13 +189,9 @@ const Home: React.FC = () => {
                     {item.desc}
                   </p>
                 </div>
-                
-                {/* Connecting Arrow */}
                 {idx < 2 && (
-                  <div className="hidden lg:flex items-center justify-center h-32 px-4">
-                    <div className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 flex items-center justify-center text-slate-300">
-                      <i className="fa-solid fa-chevron-right text-xs"></i>
-                    </div>
+                  <div className="hidden lg:flex items-center justify-center h-32 px-4 opacity-20">
+                    <div className="w-16 h-1 border-t-4 border-dotted border-slate-400"></div>
                   </div>
                 )}
               </React.Fragment>
@@ -157,59 +200,71 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      {/* Why Choose Us - Text Focused Professional Layout */}
-      <section className="py-24 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl lg:text-5xl font-black text-slate-900 dark:text-white mb-8 leading-tight">
-            Built for Professionals, <br />
-            <span className="text-primary-500">Free for Everyone.</span>
-          </h2>
-          <p className="max-w-3xl mx-auto text-lg text-slate-500 dark:text-slate-400 mb-16 leading-relaxed">
-            We believe in keeping the internet fast. LamaImage provides the essential tools you need to optimize your digital footprint without any friction.
-          </p>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 text-left">
+      {/* Built for Professionals Section (Centered & Modern) */}
+      <section className="py-24 bg-white dark:bg-slate-900">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-3xl mx-auto text-center mb-20">
+            <h2 className="text-5xl lg:text-6xl font-black text-slate-900 dark:text-white mb-8 leading-[1.1] tracking-tight">
+              Built for Professionals, <br />
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary-600 to-sky-400">Free for Everyone.</span>
+            </h2>
+            <p className="text-lg lg:text-xl text-slate-500 dark:text-slate-400 mb-10 leading-relaxed mx-auto max-w-2xl">
+              LamaImage provides enterprise-grade AI tools without the enterprise price tag. 
+              Everything you need to optimize your digital assets in one place.
+            </p>
+            <Link 
+              to="/about" 
+              className="inline-flex items-center px-8 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold rounded-2xl hover:bg-slate-200 dark:hover:bg-slate-750 transition-all hover:scale-105 active:scale-95 shadow-sm border border-slate-200 dark:border-slate-700"
+            >
+              Learn Our Mission <i className="fa-solid fa-arrow-right ml-3 text-xs opacity-50"></i>
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {features.map((feature) => (
-              <div key={feature.id} className="p-8 bg-white dark:bg-slate-800 rounded-[32px] border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-2xl hover:shadow-primary-500/10 transition-all hover:-translate-y-1 group">
-                <div className="w-14 h-14 bg-primary-50 dark:bg-primary-900/20 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                  <i className={`fa-solid ${feature.icon} text-primary-500 text-xl`}></i>
+              <div 
+                key={feature.id}
+                className="group p-10 bg-slate-50 dark:bg-slate-800/40 rounded-[40px] border border-slate-100 dark:border-slate-700/50 hover:bg-white dark:hover:bg-slate-800 hover:shadow-2xl hover:shadow-primary-500/5 transition-all duration-500"
+              >
+                <div className="w-14 h-14 bg-white dark:bg-slate-900 rounded-2xl flex items-center justify-center mb-8 shadow-sm group-hover:scale-110 group-hover:rotate-3 transition-transform text-primary-500">
+                  <i className={`fa-solid ${feature.icon} text-2xl`}></i>
                 </div>
-                <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-3">{feature.title}</h4>
-                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{feature.description}</p>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white mb-4">{feature.title}</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
+                  {feature.description}
+                </p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section className="py-24 bg-white dark:bg-slate-900">
+      {/* Testimonials (Dynamic & Manageable) */}
+      <section id="reviews-section" className="py-24 bg-slate-50 dark:bg-slate-900/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-20">
             <h2 className="text-4xl font-black text-slate-900 dark:text-white mb-4">Loved by Professionals</h2>
-            <p className="text-slate-500">Join thousands of creatives using LamaImage daily.</p>
+            <p className="text-slate-500 dark:text-slate-400">Real feedback from our global community of creators.</p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {testimonials.map((t) => (
-              <div key={t.id} className="bg-slate-50 dark:bg-slate-800/50 p-10 rounded-[32px] border border-slate-100 dark:border-slate-700 hover:shadow-2xl hover:shadow-primary-500/5 transition-all group">
-                <div className="flex items-center space-x-1 mb-8 text-amber-400 group-hover:scale-105 transition-transform origin-left">
-                  <i className="fa-solid fa-star text-sm"></i>
-                  <i className="fa-solid fa-star text-sm"></i>
-                  <i className="fa-solid fa-star text-sm"></i>
-                  <i className="fa-solid fa-star text-sm"></i>
-                  <i className="fa-solid fa-star text-sm"></i>
-                </div>
-                <p className="text-slate-600 dark:text-slate-300 italic mb-10 leading-relaxed font-serif text-lg">"{t.content}"</p>
-                <div className="flex items-center space-x-4">
-                  <img src={t.avatar} alt={t.name} className="w-14 h-14 rounded-full border-2 border-primary-100 group-hover:border-primary-400 transition-all" />
-                  <div>
-                    <h5 className="font-bold text-slate-900 dark:text-white leading-tight">{t.name}</h5>
-                    <p className="text-sm text-slate-500 font-medium">{t.role}</p>
-                  </div>
-                </div>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-20">
+            {reviews.map((r) => (
+              <ReviewCard key={r.id} review={r} />
             ))}
+          </div>
+
+          <div className="max-w-2xl mx-auto">
+             <ReviewForm onReviewSubmitted={handleNewReview} />
+          </div>
+
+          <div className="mt-20 text-center">
+            <Link 
+              to="/?tool=compress"
+              className="group inline-flex items-center px-10 py-5 bg-primary-600 text-white font-black rounded-2xl shadow-2xl shadow-primary-500/30 hover:scale-105 transition-all overflow-hidden relative"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+              Optimize Your Images Now <i className="fa-solid fa-bolt-lightning ml-3"></i>
+            </Link>
           </div>
         </div>
       </section>

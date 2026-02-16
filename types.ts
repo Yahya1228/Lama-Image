@@ -18,6 +18,16 @@ export interface SavedImage {
   size?: string;
 }
 
+export interface Review {
+  id: string;
+  name: string;
+  email?: string;
+  rating: number;
+  comment: string;
+  approved: boolean;
+  created_at: string;
+}
+
 export interface Testimonial {
   id: string;
   name: string;
