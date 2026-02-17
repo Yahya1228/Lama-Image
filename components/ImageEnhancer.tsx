@@ -15,7 +15,6 @@ const ImageEnhancer: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [error, setError] = useState<React.ReactNode | null>(null);
-  const [needsKey, setNeedsKey] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -26,11 +25,6 @@ const ImageEnhancer: React.FC = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session);
     });
-
-    // Proactively check for key as required for Pro models
-    if (window.aistudio) {
-      window.aistudio.hasSelectedApiKey().then(has => setNeedsKey(!has));
-    }
 
     return () => subscription.unsubscribe();
   }, []);
@@ -72,22 +66,39 @@ const ImageEnhancer: React.FC = () => {
   const handleEnhance = async () => {
     if (!selectedFile) return;
 
-    // Check for API key and prompt if missing (Mandatory for Gemini 3 Pro)
-    if (window.aistudio) {
-      const hasKey = await window.aistudio.hasSelectedApiKey();
-      if (!hasKey) {
-        setNeedsKey(true);
+    // Critical: Verify API Key existence
+    if (!process.env.API_KEY) {
+      if (window.aistudio) {
         await window.aistudio.openSelectKey();
-        // Proceeding assumes success per race condition rules
+        setError(
+          <div className="text-center py-4">
+            <p className="font-bold text-amber-600 mb-2">Google AI Studio Required</p>
+            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+              To use the 4K AI Restorer, please select your project key in the host dialog.
+            </p>
+            <button 
+              onClick={handleEnhance}
+              className="px-6 py-2 bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-amber-700 transition-colors"
+            >
+              Try Again After Connecting
+            </button>
+            <div className="mt-4">
+               <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-[10px] text-amber-500 underline">Check Billing Documentation</a>
+            </div>
+          </div>
+        );
+      } else {
+        setError("Missing API Key: The AI Restoration engine could not be initialized.");
       }
+      return;
     }
 
     setIsProcessing(true);
     setError(null);
     
     try {
-      // Create a new instance right before the call to pick up the selected key
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+      // Instantiate right before call
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
       const img = new Image();
       img.src = previewUrl!;
@@ -96,7 +107,7 @@ const ImageEnhancer: React.FC = () => {
       const targetAspectRatio = getClosestAspectRatio(img.width, img.height);
       const base64Data = await fileToBase64(selectedFile);
 
-      const prompt = `Task: Perform an Ultra-HD 4K Image Restoration. Reconstruct lost textures, fix compression artifacts, and sharpen edges. Intensity: ${intensity}%. Output a clean and photorealistic result.`;
+      const prompt = `Task: Perform an Ultra-HD 4K Image Restoration. Reconstruct textures, remove artifacts, and sharpen edges. Intensity: ${intensity}%.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
@@ -133,28 +144,25 @@ const ImageEnhancer: React.FC = () => {
         }
       }
 
-      if (!foundImage) throw new Error("Enhanced image reconstruction failed.");
+      if (!foundImage) throw new Error("Enhanced reconstruction failed: The AI did not return image data.");
     } catch (err: any) {
       console.error('Enhancement failed:', err);
       const msg = err.message || "";
       if (msg.includes("API Key") || msg.includes("403") || msg.includes("entity was not found")) {
         setError(
           <div className="text-center py-4 space-y-4">
-            <p className="font-black text-red-600 uppercase tracking-tight">Access Restricted</p>
-            <p className="text-[11px] leading-relaxed text-slate-600">The 4K Restoration Engine requires an authorized project key with billing enabled.</p>
+            <p className="font-black text-red-600 uppercase tracking-tight">Authentication Failed</p>
+            <p className="text-[11px] leading-relaxed text-slate-600">The current project key is not authorized for 4K models. Please check your billing status.</p>
             <button 
               onClick={() => window.aistudio?.openSelectKey().then(handleEnhance)} 
               className="px-8 py-3 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl"
             >
-              Select Authorized Key
+              Update Project Key
             </button>
-            <div className="pt-2">
-               <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-[10px] text-primary-500 underline">GCP Billing Documentation</a>
-            </div>
           </div>
         );
       } else {
-        setError("AI Restoration failed. Please ensure the file is under 10MB and try again.");
+        setError(`AI Restoration failed: ${msg || "An unexpected error occurred. Please try an image under 10MB."}`);
       }
     } finally {
       setIsProcessing(false);
@@ -236,7 +244,7 @@ const ImageEnhancer: React.FC = () => {
       ) : (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {error && (
-            <div className="p-6 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-[32px] text-slate-800 dark:text-slate-200 shadow-sm">
+            <div className="p-6 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-[32px] text-slate-800 dark:text-slate-200 shadow-sm animate-in zoom-in-95">
               {error}
             </div>
           )}
@@ -292,7 +300,7 @@ const ImageEnhancer: React.FC = () => {
               onClick={handleEnhance} 
               className="group w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black py-6 rounded-[32px] shadow-2xl shadow-amber-500/30 transition-all hover:scale-[1.02] relative overflow-hidden"
             >
-               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
                <div className="flex items-center justify-center space-x-4">
                  <i className="fa-solid fa-wand-magic-sparkles text-lg group-hover:rotate-12 transition-transform"></i> 
                  <span className="text-lg">Run AI 4K Enhancement</span>

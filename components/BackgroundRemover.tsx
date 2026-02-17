@@ -56,25 +56,43 @@ const BackgroundRemover: React.FC = () => {
   const handleRemoveBackground = async () => {
     if (!selectedFile) return;
 
-    // Check if we need to select a key first
-    if (!process.env.API_KEY && window.aistudio) {
-      const hasKey = await window.aistudio.hasSelectedApiKey();
-      if (!hasKey) {
+    // Check for API Key presence
+    if (!process.env.API_KEY) {
+      if (window.aistudio) {
         await window.aistudio.openSelectKey();
-        // After opening the dialog, we assume the key will be injected and proceed
+        setError(
+          <div className="text-center py-4">
+            <p className="font-bold text-indigo-600 mb-2">Connect to Google AI Studio</p>
+            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+              To use AI background removal, please select your Google Cloud project in the dialog that appeared.
+            </p>
+            <button 
+              onClick={handleRemoveBackground}
+              className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-colors"
+            >
+              Try Again After Selecting Key
+            </button>
+            <div className="mt-4">
+              <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-[9px] text-slate-400 hover:text-indigo-500 underline">Billing & Setup Info</a>
+            </div>
+          </div>
+        );
+      } else {
+        setError("AI Services are unavailable: No API key found in this environment.");
       }
+      return;
     }
 
     setIsProcessing(true);
     setError(null);
     
     try {
-      // Create a new instance right before making an API call as per guidelines
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+      // Create new instance with the validated key
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const base64Data = await fileToBase64(selectedFile);
 
       const prompt = `Task: Extract the main subject of this image and remove the background completely.
-      Instructions: Output a high-quality PNG with alpha transparency. Detect the primary subject accurately.`;
+      Instructions: Detect the primary subject accurately and return a high-quality PNG with alpha transparency.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
@@ -105,28 +123,26 @@ const BackgroundRemover: React.FC = () => {
         }
       }
 
-      if (!foundImage) throw new Error("No image was returned. Try an image with a more distinct subject.");
+      if (!foundImage) throw new Error("Subject extraction failed: No image returned by AI.");
     } catch (err: any) {
       console.error('BG Removal failed:', err);
       const msg = err.message || "";
+      
       if (msg.includes("API Key") || msg.includes("403") || msg.includes("entity was not found")) {
          setError(
            <div className="space-y-4 py-2 text-center">
-             <p className="font-bold text-red-600">Authentication Required</p>
-             <p className="text-xs text-slate-500">To use AI tools, you must connect a valid project with billing enabled.</p>
+             <p className="font-bold text-red-600">Access Denied</p>
+             <p className="text-xs text-slate-500">Your API key is invalid or not authorized for this project.</p>
              <button 
                onClick={() => window.aistudio?.openSelectKey().then(handleRemoveBackground)}
                className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg"
              >
-               Connect Project Key
+               Reconnect Project Key
              </button>
-             <div className="mt-2 text-[9px] text-slate-400">
-               <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="underline hover:text-indigo-500">Billing Documentation</a>
-             </div>
            </div>
          );
       } else {
-        setError("Processing failed. Please ensure your image is under 10MB and has a clear subject.");
+        setError(`Processing error: ${msg || "Unknown error occurred. Please try a different image."}`);
       }
     } finally {
       setIsProcessing(false);
@@ -205,7 +221,7 @@ const BackgroundRemover: React.FC = () => {
       ) : (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {error && (
-            <div className="p-6 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-[32px] text-slate-800 dark:text-slate-200 shadow-sm">
+            <div className="p-6 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-[32px] text-slate-800 dark:text-slate-200 shadow-sm animate-in zoom-in-95">
               {error}
             </div>
           )}
