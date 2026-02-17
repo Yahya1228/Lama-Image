@@ -59,26 +59,28 @@ const BackgroundRemover: React.FC = () => {
     // Check for API Key presence
     if (!process.env.API_KEY) {
       if (window.aistudio) {
+        // If in AI Studio, open the selection dialog
         await window.aistudio.openSelectKey();
         setError(
-          <div className="text-center py-4">
-            <p className="font-bold text-indigo-600 mb-2">Connect to Google AI Studio</p>
-            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-              To use AI background removal, please select your Google Cloud project in the dialog that appeared.
-            </p>
+          <div className="text-center py-4 space-y-3">
+            <p className="font-bold text-indigo-600">Connect to AI Studio</p>
+            <p className="text-xs text-slate-500 leading-relaxed">Please select a Google Cloud project in the dialog to continue.</p>
             <button 
               onClick={handleRemoveBackground}
-              className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-colors"
+              className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg"
             >
-              Try Again After Selecting Key
+              Continue After Selection
             </button>
-            <div className="mt-4">
-              <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-[9px] text-slate-400 hover:text-indigo-500 underline">Billing & Setup Info</a>
-            </div>
           </div>
         );
       } else {
-        setError("AI Services are unavailable: No API key found in this environment.");
+        // If on Vercel or standalone
+        setError(
+          <div className="text-center py-4 space-y-2">
+            <p className="font-bold text-red-600">Configuration Required</p>
+            <p className="text-xs text-slate-500 leading-relaxed">The API_KEY environment variable is missing. For Vercel deployments, please add the key in your project settings.</p>
+          </div>
+        );
       }
       return;
     }
@@ -87,12 +89,10 @@ const BackgroundRemover: React.FC = () => {
     setError(null);
     
     try {
-      // Create new instance with the validated key
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const base64Data = await fileToBase64(selectedFile);
 
-      const prompt = `Task: Extract the main subject of this image and remove the background completely.
-      Instructions: Detect the primary subject accurately and return a high-quality PNG with alpha transparency.`;
+      const prompt = `Task: Extract the main subject of this image and remove the background completely. Return only the isolated subject as a high-quality PNG with transparency.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
@@ -123,7 +123,7 @@ const BackgroundRemover: React.FC = () => {
         }
       }
 
-      if (!foundImage) throw new Error("Subject extraction failed: No image returned by AI.");
+      if (!foundImage) throw new Error("AI failed to isolate the subject.");
     } catch (err: any) {
       console.error('BG Removal failed:', err);
       const msg = err.message || "";
@@ -131,18 +131,18 @@ const BackgroundRemover: React.FC = () => {
       if (msg.includes("API Key") || msg.includes("403") || msg.includes("entity was not found")) {
          setError(
            <div className="space-y-4 py-2 text-center">
-             <p className="font-bold text-red-600">Access Denied</p>
-             <p className="text-xs text-slate-500">Your API key is invalid or not authorized for this project.</p>
+             <p className="font-bold text-red-600 uppercase tracking-tight">Access Error</p>
+             <p className="text-xs text-slate-500">The current API key is not valid or project billing is disabled.</p>
              <button 
                onClick={() => window.aistudio?.openSelectKey().then(handleRemoveBackground)}
                className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg"
              >
-               Reconnect Project Key
+               Change Project Key
              </button>
            </div>
          );
       } else {
-        setError(`Processing error: ${msg || "Unknown error occurred. Please try a different image."}`);
+        setError(`Processing error: ${msg || "Try a clearer image."}`);
       }
     } finally {
       setIsProcessing(false);
@@ -201,7 +201,7 @@ const BackgroundRemover: React.FC = () => {
         </h3>
         <div className="flex items-center space-x-2">
            <span className="text-[9px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-full border border-indigo-100 dark:border-indigo-800">
-             <i className="fa-solid fa-wand-magic-sparkles mr-1"></i> Subject AI
+             <i className="fa-solid fa-wand-magic-sparkles mr-1"></i> Flash AI
            </span>
         </div>
       </div>
