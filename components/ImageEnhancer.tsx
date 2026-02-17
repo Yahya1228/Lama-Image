@@ -66,11 +66,38 @@ const ImageEnhancer: React.FC = () => {
   const handleEnhance = async () => {
     if (!selectedFile) return;
 
+    // Check for API key and prompt if missing
+    if (!process.env.API_KEY) {
+      if (window.aistudio) {
+        setError(
+          <div className="text-center py-4">
+            <p className="font-bold text-amber-600 mb-2">4K Restoration Engine Connection</p>
+            <p className="text-xs mb-4 text-slate-500">To use AI 4K Upscaling, please select your Google Cloud project key.</p>
+            <button 
+              onClick={async () => {
+                await window.aistudio.openSelectKey();
+                setError(null);
+                handleEnhance();
+              }}
+              className="px-6 py-2 bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg"
+            >
+              Connect Key
+            </button>
+            <div className="mt-4">
+               <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-[9px] text-slate-400 hover:text-amber-500 underline">Billing & Setup Guide</a>
+            </div>
+          </div>
+        );
+      } else {
+        setError("API Key missing. Cannot initialize 4K Restorer.");
+      }
+      return;
+    }
+
     setIsProcessing(true);
     setError(null);
     
     try {
-      // Using gemini-2.5-flash-image for high-quality restoration without billing restrictions
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
       const img = new Image();
@@ -80,17 +107,10 @@ const ImageEnhancer: React.FC = () => {
       const targetAspectRatio = getClosestAspectRatio(img.width, img.height);
       const base64Data = await fileToBase64(selectedFile);
 
-      // Advanced prompt to simulate 4K restoration on the Flash model
-      const prompt = `Task: Perform an Ultra-HD 4K Image Restoration.
-      Instructions:
-      1. Reconstruct lost pixel data and textures with 100% precision.
-      2. Eliminate all JPEG compression artifacts, digital noise, and motion blur.
-      3. Upscale the perceived resolution to 4K Ultra-HD fidelity.
-      4. Sharpen edges while maintaining natural skin tones and organic textures.
-      5. Output a masterpiece version of this image. Intensity: ${intensity}%.`;
+      const prompt = `Task: Perform an Ultra-HD 4K Image Restoration. Reconstruct lost textures, fix compression artifacts, and sharpen edges. Intensity: ${intensity}%.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
+        model: 'gemini-3-pro-image-preview',
         contents: {
           parts: [
             { inlineData: { data: base64Data, mimeType: selectedFile.type } },
@@ -98,8 +118,9 @@ const ImageEnhancer: React.FC = () => {
           ]
         },
         config: {
-          imageConfig: {
-            aspectRatio: targetAspectRatio
+          imageConfig: { 
+            aspectRatio: targetAspectRatio,
+            imageSize: '4K' 
           }
         }
       });
@@ -123,25 +144,25 @@ const ImageEnhancer: React.FC = () => {
         }
       }
 
-      if (!foundImage) {
-        throw new Error("The AI finished processing but didn't return an image. Please try again with a different photo.");
-      }
+      if (!foundImage) throw new Error("Enhanced image reconstruction failed.");
     } catch (err: any) {
       console.error('Enhancement failed:', err);
       const msg = err.message || "";
-      
-      if (msg.includes("403") || msg.toLowerCase().includes("permission")) {
+      if (msg.includes("API Key") || msg.includes("403") || msg.includes("entity was not found")) {
         setError(
-          <div className="space-y-3">
-            <p className="font-black text-red-600">Temporary Access Error</p>
-            <p className="text-[11px] leading-relaxed">
-              We encountered a permission error with the AI engine. This usually happens during high server load. Please try again in a few seconds.
-            </p>
-            <button onClick={handleEnhance} className="px-4 py-2 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase">Retry Enhancement</button>
+          <div className="text-center py-4">
+            <p className="font-black text-red-600 mb-2 uppercase tracking-tight">Access Error</p>
+            <p className="text-[11px] mb-4 text-slate-600">The current API key is not authorized for 4K models. Ensure your project has a billing account linked.</p>
+            <button 
+              onClick={() => window.aistudio?.openSelectKey()} 
+              className="px-6 py-2 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+            >
+              Update Key
+            </button>
           </div>
         );
       } else {
-        setError("Failed to enhance image. Ensure your file is under 10MB and try again.");
+        setError("AI Restoration failed. Please ensure the file is under 10MB and try again.");
       }
     } finally {
       setIsProcessing(false);
@@ -201,7 +222,7 @@ const ImageEnhancer: React.FC = () => {
         </h3>
         <div className="flex items-center space-x-2">
            <span className="text-[9px] font-black uppercase tracking-widest text-primary-500 bg-primary-50 dark:bg-primary-900/30 px-3 py-1.5 rounded-full border border-primary-100 dark:border-primary-800">
-             <i className="fa-solid fa-bolt-lightning mr-1"></i> Flash HD Engine
+             <i className="fa-solid fa-bolt-lightning mr-1"></i> Gemini 3 Pro Engine
            </span>
         </div>
       </div>
@@ -223,7 +244,7 @@ const ImageEnhancer: React.FC = () => {
       ) : (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {error && (
-            <div className="p-6 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-[32px] text-slate-800 dark:text-slate-200 shadow-sm animate-in zoom-in-95">
+            <div className="p-6 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-[32px] text-slate-800 dark:text-slate-200 shadow-sm">
               {error}
             </div>
           )}
@@ -247,12 +268,6 @@ const ImageEnhancer: React.FC = () => {
                 <i className="fa-solid fa-trash-can"></i>
               </button>
             )}
-            
-            <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center pointer-events-none z-30">
-               <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm px-5 py-2.5 rounded-2xl border border-white/20 text-[10px] font-black text-amber-600 shadow-2xl uppercase tracking-widest">
-                  {intensity > 75 ? 'ULTRA-HD 4K MODE' : intensity > 40 ? 'HD RESTORE MODE' : 'STANDARD CLEANUP'}
-               </div>
-            </div>
           </div>
 
           <div className="bg-slate-50 dark:bg-slate-900/30 p-8 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-inner">
@@ -274,9 +289,9 @@ const ImageEnhancer: React.FC = () => {
               className="w-full h-2.5 bg-slate-200 dark:bg-slate-700 rounded-full appearance-none cursor-pointer accent-amber-500 transition-all"
             />
             <div className="flex justify-between mt-5 text-[10px] text-slate-400 font-black uppercase tracking-widest">
-              <span className={intensity < 40 ? "text-amber-500" : ""}>Clean</span>
-              <span className={intensity >= 40 && intensity < 75 ? "text-amber-500" : ""}>HD Restore</span>
-              <span className={intensity >= 75 ? "text-amber-500" : ""}>Ultra 4K Detail</span>
+              <span>Clean</span>
+              <span>HD Restore</span>
+              <span>Ultra 4K Detail</span>
             </div>
           </div>
 
@@ -295,8 +310,8 @@ const ImageEnhancer: React.FC = () => {
 
           {isDone && (
             <div className="bg-green-50 dark:bg-green-900/10 border border-green-100 dark:border-green-900/30 rounded-[48px] p-10 animate-in zoom-in-95 duration-500">
-              <div className="flex items-center justify-between mb-10">
-                <div className="flex items-center text-green-700 dark:text-green-400 font-black text-2xl">
+              <div className="flex items-center justify-between mb-10 text-green-700 dark:text-green-400 font-black text-2xl">
+                <div className="flex items-center">
                   <div className="w-14 h-14 bg-green-500 rounded-2xl flex items-center justify-center text-white mr-5 shadow-2xl shadow-green-500/20">
                     <i className="fa-solid fa-check text-xl"></i>
                   </div>
