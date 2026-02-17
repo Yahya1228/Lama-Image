@@ -14,6 +14,7 @@ const BackgroundRemover: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [error, setError] = useState<React.ReactNode | null>(null);
+  const [needsKeySelection, setNeedsKeySelection] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -50,6 +51,21 @@ const BackgroundRemover: React.FC = () => {
       setIsDone(false);
       setIsSaved(false);
       setError(null);
+      setNeedsKeySelection(false);
+    }
+  };
+
+  const handleOpenKeySelection = async () => {
+    if (window.aistudio) {
+      try {
+        await window.aistudio.openSelectKey();
+        setNeedsKeySelection(false);
+        setError(null);
+        // Automatically retry after selection
+        if (selectedFile) handleRemoveBackground();
+      } catch (e) {
+        console.error("Key selection failed", e);
+      }
     }
   };
 
@@ -60,11 +76,10 @@ const BackgroundRemover: React.FC = () => {
     setError(null);
     
     try {
-      // Use the provided API KEY. If missing, the SDK will throw an error we catch below.
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
       const base64Data = await fileToBase64(selectedFile);
 
-      const prompt = `Task: Extract the main subject of this image and remove the background completely. Return only the isolated subject as a high-quality PNG with transparency.`;
+      const prompt = `Task: Extract the main subject and remove the background. Return only a transparent PNG.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
@@ -95,36 +110,27 @@ const BackgroundRemover: React.FC = () => {
         }
       }
 
-      if (!foundImage) throw new Error("AI failed to isolate the subject.");
+      if (!foundImage) throw new Error("No processed image returned from AI.");
     } catch (err: any) {
-      console.error('BG Removal failed:', err);
+      console.error('BG Removal error:', err);
       const msg = err.message || "";
-      
-      // Handle Authentication or missing project errors
-      if (msg.includes("API Key") || msg.includes("403") || msg.includes("entity was not found") || !process.env.API_KEY) {
-         if (window.aistudio) {
-           setError(
-             <div className="space-y-4 py-2 text-center">
-               <p className="font-bold text-indigo-600 uppercase tracking-tight">Project Connection Required</p>
-               <p className="text-xs text-slate-500">Please connect a valid Google Cloud project to enable AI tools.</p>
-               <button 
-                 onClick={() => window.aistudio?.openSelectKey().then(handleRemoveBackground)}
-                 className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg"
-               >
-                 Connect Project Key
-               </button>
-             </div>
-           );
-         } else {
-           setError(
-             <div className="space-y-2 py-2 text-center">
-               <p className="font-bold text-red-600 uppercase tracking-tight">API Configuration Error</p>
-               <p className="text-xs text-slate-500">The API_KEY is missing or invalid. Please ensure it is set in your Vercel/Environment settings.</p>
-             </div>
-           );
-         }
+      const isAuthError = msg.toLowerCase().includes("permission denied") || 
+                          msg.toLowerCase().includes("api key") || 
+                          msg.toLowerCase().includes("requested entity was not found") ||
+                          msg.toLowerCase().includes("403");
+
+      if (isAuthError) {
+        setNeedsKeySelection(true);
+        setError(
+          <div className="text-center py-2 space-y-3">
+            <p className="font-bold text-red-600">Authentication Required</p>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Subject extraction requires a Google Cloud project with active billing. Your current session key has insufficient permissions.
+            </p>
+          </div>
+        );
       } else {
-        setError(`Processing error: ${msg || "Try a clearer image."}`);
+        setError(`AI Error: ${msg || "Try a different image."}`);
       }
     } finally {
       setIsProcessing(false);
@@ -169,6 +175,7 @@ const BackgroundRemover: React.FC = () => {
     setIsDone(false);
     setIsSaved(false);
     setError(null);
+    setNeedsKeySelection(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -183,7 +190,7 @@ const BackgroundRemover: React.FC = () => {
         </h3>
         <div className="flex items-center space-x-2">
            <span className="text-[9px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-full border border-indigo-100 dark:border-indigo-800">
-             <i className="fa-solid fa-wand-magic-sparkles mr-1"></i> Flash AI
+             <i className="fa-solid fa-wand-magic-sparkles mr-1"></i> AI Subject Engine
            </span>
         </div>
       </div>
@@ -205,6 +212,14 @@ const BackgroundRemover: React.FC = () => {
           {error && (
             <div className="p-6 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-[32px] text-slate-800 dark:text-slate-200 shadow-sm animate-in zoom-in-95">
               {error}
+              {needsKeySelection && window.aistudio && (
+                <button 
+                  onClick={handleOpenKeySelection}
+                  className="mt-4 w-full py-4 bg-indigo-600 text-white font-black rounded-2xl shadow-xl hover:bg-indigo-700 transition-all active:scale-95"
+                >
+                  Connect Paid Project Key
+                </button>
+              )}
             </div>
           )}
 
@@ -227,16 +242,16 @@ const BackgroundRemover: React.FC = () => {
             )}
           </div>
 
-          {!isDone && !isProcessing && (
+          {!isDone && !isProcessing && !needsKeySelection && (
             <button 
               onClick={handleRemoveBackground} 
               className="group w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-black py-6 rounded-[32px] shadow-2xl shadow-indigo-500/30 transition-all hover:scale-[1.02] relative overflow-hidden"
             >
-               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
-               <div className="flex items-center justify-center space-x-4">
-                 <i className="fa-solid fa-scissors text-lg group-hover:rotate-12 transition-transform"></i> 
-                 <span className="text-lg">Remove Background Now</span>
-               </div>
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+              <div className="flex items-center justify-center space-x-4">
+                <i className="fa-solid fa-scissors text-lg group-hover:rotate-12 transition-transform"></i> 
+                <span className="text-lg">Remove Background Now</span>
+              </div>
             </button>
           )}
 

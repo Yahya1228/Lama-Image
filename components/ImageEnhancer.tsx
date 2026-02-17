@@ -15,7 +15,7 @@ const ImageEnhancer: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [error, setError] = useState<React.ReactNode | null>(null);
-  const [isKeySelected, setIsKeySelected] = useState<boolean | null>(null);
+  const [needsKeySelection, setNeedsKeySelection] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -26,16 +26,6 @@ const ImageEnhancer: React.FC = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session);
     });
-
-    // Check for key selection status on load (Mandatory for Gemini 3 Pro)
-    if (window.aistudio) {
-      window.aistudio.hasSelectedApiKey().then(has => {
-        setIsKeySelected(has);
-      });
-    } else {
-      // If not in AI Studio, we rely on the environment variable
-      setIsKeySelected(!!process.env.API_KEY);
-    }
 
     return () => subscription.unsubscribe();
   }, []);
@@ -52,15 +42,6 @@ const ImageEnhancer: React.FC = () => {
     });
   };
 
-  const getClosestAspectRatio = (width: number, height: number): "1:1" | "4:3" | "3:4" | "16:9" | "9:16" => {
-    const ratio = width / height;
-    if (ratio > 1.5) return "16:9";
-    if (ratio > 1.2) return "4:3";
-    if (ratio < 0.6) return "9:16";
-    if (ratio < 0.8) return "3:4";
-    return "1:1";
-  };
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -71,13 +52,20 @@ const ImageEnhancer: React.FC = () => {
       setIsDone(false);
       setIsSaved(false);
       setError(null);
+      setNeedsKeySelection(false);
     }
   };
 
-  const handleOpenKeyDialog = async () => {
+  const handleOpenKeySelection = async () => {
     if (window.aistudio) {
-      await window.aistudio.openSelectKey();
-      setIsKeySelected(true); // Assume success per race condition rules
+      try {
+        await window.aistudio.openSelectKey();
+        setNeedsKeySelection(false);
+        setError(null);
+        if (selectedFile) handleEnhance();
+      } catch (e) {
+        console.error("Key selection failed", e);
+      }
     }
   };
 
@@ -86,32 +74,24 @@ const ImageEnhancer: React.FC = () => {
 
     setIsProcessing(true);
     setError(null);
+    setNeedsKeySelection(false);
     
     try {
+      // Using gemini-2.5-flash-image for reliable, faster processing with less frequent 403s
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-      
-      const img = new Image();
-      img.src = previewUrl!;
-      await new Promise(r => img.onload = r);
-      
-      const targetAspectRatio = getClosestAspectRatio(img.width, img.height);
       const base64Data = await fileToBase64(selectedFile);
 
-      const prompt = `Task: Perform an Ultra-HD 4K Image Restoration. Enhance clarity, sharpen edges, and reconstruct missing textures while maintaining realism. Intensity: ${intensity}%. Output the final image directly.`;
+      const prompt = `Task: Professional AI Image Enhancement. 
+      Intensity Level: ${intensity}%. 
+      Instructions: Upscale and restore details, sharpen edges, and remove noise. Maintain natural colors. Return the result as the original image type or PNG.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-image-preview',
+        model: 'gemini-2.5-flash-image',
         contents: {
           parts: [
             { inlineData: { data: base64Data, mimeType: selectedFile.type } },
             { text: prompt }
           ]
-        },
-        config: {
-          imageConfig: { 
-            aspectRatio: targetAspectRatio,
-            imageSize: '4K' 
-          }
         }
       });
 
@@ -134,34 +114,27 @@ const ImageEnhancer: React.FC = () => {
         }
       }
 
-      if (!foundImage) throw new Error("Enhanced reconstruction failed: No image returned.");
+      if (!foundImage) throw new Error("AI did not return an image part.");
     } catch (err: any) {
-      console.error('Enhancement failed:', err);
+      console.error('Enhancement error:', err);
       const msg = err.message || "";
-      if (msg.includes("API Key") || msg.includes("403") || msg.includes("entity was not found") || !process.env.API_KEY) {
-        if (window.aistudio) {
-          setError(
-            <div className="text-center py-4 space-y-4">
-              <p className="font-black text-amber-600 uppercase tracking-tight">Cloud Connection Required</p>
-              <p className="text-[11px] leading-relaxed text-slate-600">Gemini 3 Pro requires an authorized project key with billing enabled.</p>
-              <button 
-                onClick={() => handleOpenKeyDialog().then(handleEnhance)} 
-                className="px-8 py-3 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl"
-              >
-                Connect Project Key
-              </button>
-            </div>
-          );
-        } else {
-          setError(
-            <div className="text-center py-4 space-y-2">
-              <p className="font-black text-red-600 uppercase tracking-tight">API Configuration Missing</p>
-              <p className="text-[11px] leading-relaxed text-slate-600">The API_KEY is not set. For external deployments, please configure your environment variables.</p>
-            </div>
-          );
-        }
+      const isAuthError = msg.toLowerCase().includes("permission denied") || 
+                          msg.toLowerCase().includes("api key") || 
+                          msg.toLowerCase().includes("requested entity was not found") ||
+                          msg.toLowerCase().includes("403");
+
+      if (isAuthError) {
+        setNeedsKeySelection(true);
+        setError(
+          <div className="text-center py-2 space-y-3">
+            <p className="font-black text-red-600 uppercase">Access Denied</p>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              The API call failed with a permission error. This usually requires selecting a Google Cloud project with billing enabled in AI Studio.
+            </p>
+          </div>
+        );
       } else {
-        setError(`AI Restoration failed: ${msg || "Ensure file size is under 10MB."}`);
+        setError(`Processing failed: ${msg || "An unexpected error occurred."}`);
       }
     } finally {
       setIsProcessing(false);
@@ -174,9 +147,9 @@ const ImageEnhancer: React.FC = () => {
     setIsSaving(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) throw new Error("Please log in to save images.");
+      if (!session?.user) throw new Error("Please log in to save.");
 
-      const fileName = `${Date.now()}_ultra_hd_${selectedFile.name}`;
+      const fileName = `${Date.now()}_restored_${selectedFile.name}`;
       const filePath = `${session.user.id}/${fileName}`;
 
       await supabase.storage.from('images').upload(filePath, dataToSave);
@@ -188,7 +161,7 @@ const ImageEnhancer: React.FC = () => {
         url: publicUrl,
         type: 'enhanced',
         date: new Date().toISOString(),
-        size: intensity > 70 ? '4K Ultra HD' : 'HD Enhanced'
+        size: intensity > 80 ? 'Ultra HD' : 'HD Enhanced'
       }]);
 
       setIsSaved(true);
@@ -207,6 +180,7 @@ const ImageEnhancer: React.FC = () => {
     setIsDone(false);
     setIsSaved(false);
     setError(null);
+    setNeedsKeySelection(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -217,11 +191,11 @@ const ImageEnhancer: React.FC = () => {
           <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center mr-4 text-amber-600">
              <i className="fa-solid fa-wand-magic-sparkles text-lg"></i>
           </div>
-          Lama AI 4K Restorer
+          AI Image Enhancer
         </h3>
         <div className="flex items-center space-x-2">
            <span className="text-[9px] font-black uppercase tracking-widest text-primary-500 bg-primary-50 dark:bg-primary-900/30 px-3 py-1.5 rounded-full border border-primary-100 dark:border-primary-800">
-             <i className="fa-solid fa-bolt-lightning mr-1"></i> Gemini 3 Pro
+             <i className="fa-solid fa-bolt-lightning mr-1"></i> AI Engine
            </span>
         </div>
       </div>
@@ -232,32 +206,33 @@ const ImageEnhancer: React.FC = () => {
           className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-[32px] p-20 text-center cursor-pointer hover:border-amber-400 hover:bg-amber-50/30 dark:hover:bg-amber-900/10 transition-all group relative overflow-hidden"
         >
           <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
-          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          
           <div className="w-24 h-24 bg-amber-50 dark:bg-amber-900/20 rounded-[32px] flex items-center justify-center mx-auto mb-8 group-hover:scale-110 transition-transform duration-500 shadow-sm">
             <i className="fa-solid fa-image-portrait text-amber-500 text-4xl"></i>
           </div>
-          <p className="text-2xl text-slate-700 dark:text-slate-200 font-black mb-2">Enhance to 4K Ultra-HD</p>
-          <p className="text-slate-400 text-sm font-medium">AI detail restoration & pixel upscaling</p>
+          <p className="text-2xl text-slate-700 dark:text-slate-200 font-black mb-2">Enhance Details</p>
+          <p className="text-slate-400 text-sm font-medium">AI upscaling & detail restoration</p>
         </div>
       ) : (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {error && (
             <div className="p-6 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-[32px] text-slate-800 dark:text-slate-200 shadow-sm animate-in zoom-in-95">
               {error}
+              {needsKeySelection && window.aistudio && (
+                <button 
+                  onClick={handleOpenKeySelection}
+                  className="mt-4 w-full py-4 bg-slate-800 text-white font-black rounded-2xl shadow-xl hover:bg-black transition-all active:scale-95"
+                >
+                  Connect Project Key
+                </button>
+              )}
             </div>
           )}
 
           <div className="relative group rounded-[32px] overflow-hidden bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 aspect-video flex items-center justify-center shadow-inner">
             {isProcessing && (
                <div className="absolute inset-0 flex flex-col items-center justify-center z-30 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md">
-                  <div className="relative">
-                    <div className="w-20 h-20 border-4 border-amber-500/10 border-t-amber-500 rounded-full animate-spin"></div>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <i className="fa-solid fa-microchip text-amber-500 animate-pulse"></i>
-                    </div>
-                  </div>
-                  <p className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mt-6 animate-pulse">Reconstructing 4K Pixels...</p>
+                  <div className="w-20 h-20 border-4 border-amber-500/10 border-t-amber-500 rounded-full animate-spin"></div>
+                  <p className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mt-6 animate-pulse">Enhancing Pixels...</p>
                </div>
             )}
             <img src={enhancedUrl || previewUrl!} className={`max-w-full max-h-full object-contain p-4 transition-all duration-1000 ${isProcessing ? 'scale-95 blur-sm opacity-50' : 'scale-100'}`} alt="Preview" />
@@ -269,89 +244,83 @@ const ImageEnhancer: React.FC = () => {
             )}
           </div>
 
-          <div className="bg-slate-50 dark:bg-slate-900/30 p-8 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-inner">
+          <div className="bg-slate-50 dark:bg-slate-900/50 p-8 rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-inner">
             <div className="flex justify-between items-center mb-6">
               <label className="text-sm font-black text-slate-700 dark:text-slate-300 flex items-center">
-                <i className="fa-solid fa-sliders mr-3 text-amber-500"></i>
-                Restoration Intensity
+                <div className="w-2 h-2 rounded-full bg-amber-500 mr-2 animate-pulse"></div>
+                Enhancement Intensity
               </label>
-              <span className="text-sm font-black text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-4 py-1.5 rounded-xl border border-amber-100 dark:border-amber-900/30 shadow-sm">{intensity}%</span>
+              <span className="text-sm font-black text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-4 py-1.5 rounded-xl border border-amber-100 dark:border-amber-900/30">
+                {intensity}%
+              </span>
             </div>
             <input 
-              type="range" min="10" max="100" value={intensity} 
+              type="range" 
+              min="5" 
+              max="100" 
+              value={intensity} 
               onChange={(e) => {
                 setIntensity(parseInt(e.target.value));
                 setIsDone(false);
+                setEnhancedUrl(null);
                 setError(null);
               }}
               disabled={isProcessing}
-              className="w-full h-2.5 bg-slate-200 dark:bg-slate-700 rounded-full appearance-none cursor-pointer accent-amber-500 transition-all"
+              className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full appearance-none cursor-pointer accent-amber-500 disabled:opacity-50 transition-all"
             />
-            <div className="flex justify-between mt-5 text-[10px] text-slate-400 font-black uppercase tracking-widest">
-              <span>Clean</span>
-              <span>HD</span>
-              <span>Ultra 4K</span>
+            <div className="flex justify-between mt-4 text-[11px] text-slate-400 font-black uppercase tracking-widest">
+              <span className={intensity < 30 ? "text-amber-500 transition-colors" : ""}>Soft</span>
+              <span className={intensity >= 30 && intensity <= 70 ? "text-amber-500 transition-colors" : ""}>Balanced</span>
+              <span className={intensity > 70 ? "text-amber-500 transition-colors" : ""}>Ultra HD</span>
             </div>
           </div>
 
-          {!isDone && !isProcessing && (
-             <>
-               {isKeySelected === false && window.aistudio ? (
-                 <button 
-                   onClick={handleOpenKeyDialog}
-                   className="w-full py-6 bg-slate-800 text-white font-black rounded-[32px] shadow-2xl flex items-center justify-center space-x-3 hover:bg-black transition-all"
-                 >
-                   <i className="fa-solid fa-key"></i>
-                   <span>Connect Google Project to Enable 4K</span>
-                 </button>
-               ) : (
-                 <button 
-                  onClick={handleEnhance} 
-                  className="group w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black py-6 rounded-[32px] shadow-2xl shadow-amber-500/30 transition-all hover:scale-[1.02] relative overflow-hidden"
-                >
-                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
-                   <div className="flex items-center justify-center space-x-4">
-                     <i className="fa-solid fa-wand-magic-sparkles text-lg group-hover:rotate-12 transition-transform"></i> 
-                     <span className="text-lg">Run AI 4K Enhancement</span>
-                   </div>
-                </button>
-               )}
-             </>
+          {!isDone && !isProcessing && !needsKeySelection && (
+            <button 
+              onClick={handleEnhance} 
+              className="group w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black py-6 rounded-[32px] shadow-2xl shadow-amber-500/30 transition-all hover:scale-[1.02] relative overflow-hidden"
+            >
+               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+               <div className="flex items-center justify-center space-x-4">
+                 <i className="fa-solid fa-wand-magic-sparkles text-lg group-hover:rotate-12 transition-transform"></i> 
+                 <span className="text-lg">Run AI Restoration</span>
+               </div>
+            </button>
           )}
 
           {isDone && (
-            <div className="bg-green-50 dark:bg-green-900/10 border border-green-100 dark:border-green-900/30 rounded-[48px] p-10 animate-in zoom-in-95 duration-500">
-              <div className="flex items-center justify-between mb-10 text-green-700 dark:text-green-400 font-black text-2xl">
-                <div className="flex items-center">
-                  <div className="w-14 h-14 bg-green-500 rounded-2xl flex items-center justify-center text-white mr-5 shadow-2xl shadow-green-500/20">
+            <div className="bg-green-50 dark:bg-green-900/10 border border-green-100 dark:border-green-900/30 rounded-[40px] p-10 animate-in zoom-in-95 duration-500">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center text-green-700 dark:text-green-400 font-black text-2xl">
+                  <div className="w-12 h-12 bg-green-500 rounded-2xl flex items-center justify-center text-white mr-4 shadow-xl shadow-green-500/20">
                     <i className="fa-solid fa-check text-xl"></i>
                   </div>
-                  4K Master Ready
+                  Ready
                 </div>
               </div>
               
-              <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-4">
                 <div className="flex gap-4">
-                  <button onClick={clear} className="px-8 py-6 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-black rounded-[28px] border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-all hover:scale-105 shadow-sm">
+                  <button onClick={clear} className="px-6 py-5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-black rounded-[24px] border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-all shadow-sm">
                     <i className="fa-solid fa-rotate-left"></i>
                   </button>
                   <a 
                     href={enhancedUrl!} 
-                    download={`Lama4K_${selectedFile.name}`} 
-                    className="flex-grow text-center bg-primary-600 text-white font-black py-6 rounded-[28px] shadow-2xl shadow-primary-500/30 hover:scale-[1.02] hover:bg-primary-700 transition-all flex items-center justify-center space-x-3 text-lg"
+                    download={`LamaEnhanced_${selectedFile.name}`} 
+                    className="flex-grow text-center bg-primary-600 text-white font-black py-5 rounded-[24px] shadow-2xl shadow-primary-500/30 hover:scale-[1.02] hover:bg-primary-700 transition-all flex items-center justify-center space-x-3 text-lg"
                   >
                     <i className="fa-solid fa-download"></i>
-                    <span>Download 4K Image</span>
+                    <span>Download Image</span>
                   </a>
                 </div>
                 {isLoggedIn && (
                   <button 
                     onClick={handleSaveToLibrary} 
                     disabled={isSaved || isSaving} 
-                    className={`w-full py-5 rounded-[24px] font-black text-sm transition-all flex items-center justify-center space-x-2 ${isSaved ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-slate-800 dark:bg-slate-700 text-white hover:bg-black shadow-xl'}`}
+                    className={`w-full py-4 rounded-[20px] font-black text-sm transition-all flex items-center justify-center space-x-2 ${isSaved ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-slate-800 dark:bg-slate-700 text-white hover:bg-black shadow-xl'}`}
                   >
                     {isSaving ? <i className="fa-solid fa-spinner animate-spin"></i> : <i className={`fa-solid ${isSaved ? 'fa-check' : 'fa-cloud-arrow-up'}`}></i>}
-                    <span>{isSaved ? 'Restoration Saved to Cloud' : isSaving ? 'Uploading 4K Assets...' : 'Save to My Library'}</span>
+                    <span>{isSaved ? 'Saved to Cloud' : isSaving ? 'Uploading...' : 'Save to My Library'}</span>
                   </button>
                 )}
               </div>

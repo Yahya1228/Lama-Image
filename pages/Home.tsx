@@ -170,51 +170,93 @@ const Home: React.FC = () => {
         </section>
       )}
 
-      {/* How it Works Section */}
-      <section className="py-24 bg-slate-50 dark:bg-slate-900/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-20">
-            <h2 className="text-4xl lg:text-5xl font-black text-slate-900 dark:text-white mb-6">How It Works</h2>
-            <p className="max-w-2xl mx-auto text-slate-500 dark:text-slate-400 text-lg">
-              Experience professional-grade image processing in three simple steps.
-              Fast, intuitive, and designed for high-performance workflows.
+      {/* How it Works Section - Premium Redesign */}
+      <section className="py-24 relative overflow-hidden bg-white dark:bg-slate-950">
+        {/* Modern Background Accents */}
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_20%_20%,_rgba(14,165,233,0.03)_0%,_transparent_50%)]"></div>
+        <div className="absolute bottom-0 right-0 w-full h-full bg-[radial-gradient(circle_at_80%_80%,_rgba(79,70,229,0.03)_0%,_transparent_50%)]"></div>
+
+        <div className="max-w-7xl mx-auto px-6 lg:px-8 relative z-10">
+          <div className="text-center mb-20 lg:mb-24">
+            <div className="inline-block px-4 py-1 mb-4 rounded-full bg-primary-50 dark:bg-primary-900/20 border border-primary-100 dark:border-primary-800">
+               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary-600 dark:text-primary-400">Easy Workflow</span>
+            </div>
+            <h2 className="text-4xl lg:text-5xl font-black text-slate-900 dark:text-white mb-6 tracking-tight">
+              How it works
+            </h2>
+            <div className="w-12 h-1 bg-primary-500 mx-auto rounded-full mb-6"></div>
+            <p className="max-w-lg mx-auto text-slate-500 dark:text-slate-400 text-base font-medium">
+              Transform your digital assets in three simple steps. No complex software, just instant results.
             </p>
           </div>
 
-          <div className="flex flex-col lg:flex-row items-start justify-between gap-12 lg:gap-0 max-w-6xl mx-auto">
+          <div className="relative grid grid-cols-1 md:grid-cols-3 gap-12 lg:gap-8 max-w-5xl mx-auto">
+            {/* Elegant Desktop Connector */}
+            <div className="hidden md:block absolute top-16 left-[20%] right-[20%] h-[1px] bg-slate-100 dark:bg-slate-800 -z-0">
+               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary-500/20 to-transparent"></div>
+            </div>
+
             {[
-              { step: '01', title: 'Upload Image', desc: 'Drag and drop your photos directly into our processing tool.', icon: 'fa-cloud-arrow-up' },
-              { step: '02', title: 'AI Process', desc: 'Select between high-ratio compression or AI-powered detail enhancement.', icon: 'fa-gears' },
-              { step: '03', title: 'Done!', desc: 'Download your optimized image in seconds with zero loss in quality.', icon: 'fa-circle-down' },
+              { 
+                step: '01', 
+                title: 'Drop Files', 
+                desc: 'Upload your original assets.', 
+                icon: 'fa-cloud-arrow-up',
+                gradient: 'from-blue-500 to-primary-600',
+                glow: 'group-hover:shadow-blue-500/30'
+              },
+              { 
+                step: '02', 
+                title: 'AI Logic', 
+                desc: 'Neural engine processes pixels.', 
+                icon: 'fa-microchip',
+                gradient: 'from-primary-600 to-indigo-600',
+                glow: 'group-hover:shadow-primary-500/30'
+              },
+              { 
+                step: '03', 
+                title: 'Download', 
+                desc: 'Get your web-ready output.', 
+                icon: 'fa-circle-check',
+                gradient: 'from-emerald-500 to-teal-600',
+                glow: 'group-hover:shadow-emerald-500/30'
+              },
             ].map((item, idx) => (
-              <React.Fragment key={idx}>
-                <div className="flex flex-col items-center text-center flex-1">
-                  <div className="relative mb-10 group">
-                    <div className="w-32 h-32 bg-white dark:bg-slate-800 rounded-[38px] flex items-center justify-center border border-slate-100 dark:border-slate-700 shadow-sm transition-all duration-500 group-hover:scale-105 group-hover:shadow-xl group-hover:shadow-primary-500/10">
-                      <i className={`fa-solid ${item.icon} text-4xl text-primary-600 dark:text-primary-400 group-hover:scale-110 transition-transform`}></i>
-                    </div>
-                    <div className="absolute -top-3 -right-3 w-12 h-12 bg-primary-600 rounded-full border-4 border-white dark:border-slate-800 shadow-xl flex items-center justify-center">
-                      <span className="text-sm font-black text-white">{item.step}</span>
+              <div 
+                key={idx}
+                className="group flex flex-col items-center text-center animate-in fade-in slide-in-from-bottom-4 duration-700"
+                style={{ animationDelay: `${idx * 150}ms` }}
+              >
+                <div className="relative mb-10">
+                  {/* Glassmorphism Icon Card */}
+                  <div className={`relative w-28 h-28 bg-white dark:bg-slate-900 rounded-full flex items-center justify-center border border-slate-100 dark:border-slate-800 shadow-xl transition-all duration-500 group-hover:scale-110 group-hover:-translate-y-2 z-10 ${item.glow}`}>
+                    <div className={`w-16 h-16 bg-gradient-to-br ${item.gradient} rounded-full flex items-center justify-center text-white shadow-inner`}>
+                      <i className={`fa-solid ${item.icon} text-2xl`}></i>
                     </div>
                   </div>
-                  <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-4 leading-tight">{item.title}</h3>
-                  <p className="text-slate-500 dark:text-slate-400 leading-relaxed max-w-[280px] text-sm lg:text-base">
+                  
+                  {/* Stylish Step Number */}
+                  <div className="absolute -top-4 -right-2 w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-[11px] font-black text-slate-400 dark:text-slate-500 shadow-sm border border-slate-100 dark:border-slate-700 z-20 group-hover:border-primary-500 transition-colors">
+                    {item.step}
+                  </div>
+                </div>
+
+                <div className="px-4">
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2 transition-colors group-hover:text-primary-600">
+                    {item.title}
+                  </h3>
+                  <p className="text-slate-500 dark:text-slate-400 leading-relaxed text-sm max-w-[180px] mx-auto font-medium">
                     {item.desc}
                   </p>
                 </div>
-                {idx < 2 && (
-                  <div className="hidden lg:flex items-center justify-center h-32 px-4 opacity-20">
-                    <div className="w-16 h-1 border-t-4 border-dotted border-slate-400"></div>
-                  </div>
-                )}
-              </React.Fragment>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
       {/* Built for Professionals Section (Centered & Modern) */}
-      <section className="py-24 bg-white dark:bg-slate-900">
+      <section className="py-24 bg-slate-50/50 dark:bg-slate-900/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto text-center mb-20">
             <h2 className="text-5xl lg:text-6xl font-black text-slate-900 dark:text-white mb-8 leading-[1.1] tracking-tight">
@@ -237,9 +279,9 @@ const Home: React.FC = () => {
             {features.map((feature) => (
               <div 
                 key={feature.id}
-                className="group p-10 bg-slate-50 dark:bg-slate-800/40 rounded-[40px] border border-slate-100 dark:border-slate-700/50 hover:bg-white dark:hover:bg-slate-800 hover:shadow-2xl hover:shadow-primary-500/5 transition-all duration-500"
+                className="group p-10 bg-white dark:bg-slate-800/40 rounded-[40px] border border-slate-100 dark:border-slate-700/50 hover:bg-white dark:hover:bg-slate-800 hover:shadow-2xl hover:shadow-primary-500/5 transition-all duration-500"
               >
-                <div className="w-14 h-14 bg-white dark:bg-slate-900 rounded-2xl flex items-center justify-center mb-8 shadow-sm group-hover:scale-110 group-hover:rotate-3 transition-transform text-primary-500">
+                <div className="w-14 h-14 bg-slate-50 dark:bg-slate-900 rounded-2xl flex items-center justify-center mb-8 shadow-sm group-hover:scale-110 group-hover:rotate-3 transition-transform text-primary-500">
                   <i className={`fa-solid ${feature.icon} text-2xl`}></i>
                 </div>
                 <h3 className="text-xl font-black text-slate-900 dark:text-white mb-4">{feature.title}</h3>
@@ -253,7 +295,7 @@ const Home: React.FC = () => {
       </section>
 
       {/* Testimonials (Dynamic & Manageable) */}
-      <section id="reviews-section" className="py-24 bg-slate-50 dark:bg-slate-900/50">
+      <section id="reviews-section" className="py-24 bg-white dark:bg-slate-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-20">
             <h2 className="text-4xl font-black text-slate-900 dark:text-white mb-4">Loved by Professionals</h2>
