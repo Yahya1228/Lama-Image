@@ -15,6 +15,7 @@ const ImageEnhancer: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [error, setError] = useState<React.ReactNode | null>(null);
+  const [needsKey, setNeedsKey] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -25,6 +26,11 @@ const ImageEnhancer: React.FC = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session);
     });
+
+    // Proactively check for key as required for Pro models
+    if (window.aistudio) {
+      window.aistudio.hasSelectedApiKey().then(has => setNeedsKey(!has));
+    }
 
     return () => subscription.unsubscribe();
   }, []);
@@ -66,39 +72,22 @@ const ImageEnhancer: React.FC = () => {
   const handleEnhance = async () => {
     if (!selectedFile) return;
 
-    // Check for API key and prompt if missing
-    if (!process.env.API_KEY) {
-      if (window.aistudio) {
-        setError(
-          <div className="text-center py-4">
-            <p className="font-bold text-amber-600 mb-2">4K Restoration Engine Connection</p>
-            <p className="text-xs mb-4 text-slate-500">To use AI 4K Upscaling, please select your Google Cloud project key.</p>
-            <button 
-              onClick={async () => {
-                await window.aistudio.openSelectKey();
-                setError(null);
-                handleEnhance();
-              }}
-              className="px-6 py-2 bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg"
-            >
-              Connect Key
-            </button>
-            <div className="mt-4">
-               <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-[9px] text-slate-400 hover:text-amber-500 underline">Billing & Setup Guide</a>
-            </div>
-          </div>
-        );
-      } else {
-        setError("API Key missing. Cannot initialize 4K Restorer.");
+    // Check for API key and prompt if missing (Mandatory for Gemini 3 Pro)
+    if (window.aistudio) {
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      if (!hasKey) {
+        setNeedsKey(true);
+        await window.aistudio.openSelectKey();
+        // Proceeding assumes success per race condition rules
       }
-      return;
     }
 
     setIsProcessing(true);
     setError(null);
     
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Create a new instance right before the call to pick up the selected key
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
       
       const img = new Image();
       img.src = previewUrl!;
@@ -107,7 +96,7 @@ const ImageEnhancer: React.FC = () => {
       const targetAspectRatio = getClosestAspectRatio(img.width, img.height);
       const base64Data = await fileToBase64(selectedFile);
 
-      const prompt = `Task: Perform an Ultra-HD 4K Image Restoration. Reconstruct lost textures, fix compression artifacts, and sharpen edges. Intensity: ${intensity}%.`;
+      const prompt = `Task: Perform an Ultra-HD 4K Image Restoration. Reconstruct lost textures, fix compression artifacts, and sharpen edges. Intensity: ${intensity}%. Output a clean and photorealistic result.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
@@ -150,15 +139,18 @@ const ImageEnhancer: React.FC = () => {
       const msg = err.message || "";
       if (msg.includes("API Key") || msg.includes("403") || msg.includes("entity was not found")) {
         setError(
-          <div className="text-center py-4">
-            <p className="font-black text-red-600 mb-2 uppercase tracking-tight">Access Error</p>
-            <p className="text-[11px] mb-4 text-slate-600">The current API key is not authorized for 4K models. Ensure your project has a billing account linked.</p>
+          <div className="text-center py-4 space-y-4">
+            <p className="font-black text-red-600 uppercase tracking-tight">Access Restricted</p>
+            <p className="text-[11px] leading-relaxed text-slate-600">The 4K Restoration Engine requires an authorized project key with billing enabled.</p>
             <button 
-              onClick={() => window.aistudio?.openSelectKey()} 
-              className="px-6 py-2 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"
+              onClick={() => window.aistudio?.openSelectKey().then(handleEnhance)} 
+              className="px-8 py-3 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl"
             >
-              Update Key
+              Select Authorized Key
             </button>
+            <div className="pt-2">
+               <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-[10px] text-primary-500 underline">GCP Billing Documentation</a>
+            </div>
           </div>
         );
       } else {

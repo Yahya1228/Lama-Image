@@ -56,44 +56,25 @@ const BackgroundRemover: React.FC = () => {
   const handleRemoveBackground = async () => {
     if (!selectedFile) return;
 
-    // Critical: Verify API Key before instantiating the client
-    if (!process.env.API_KEY) {
-      if (window.aistudio) {
-        setError(
-          <div className="text-center py-4">
-            <p className="font-bold text-red-600 mb-2">API Key Required</p>
-            <p className="text-xs mb-4">Please connect your Google AI Studio key to use this feature.</p>
-            <button 
-              onClick={async () => {
-                await window.aistudio.openSelectKey();
-                setError(null);
-                handleRemoveBackground();
-              }}
-              className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg"
-            >
-              Select Project Key
-            </button>
-            <div className="mt-4">
-               <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-[9px] text-slate-400 hover:text-indigo-500 underline">Billing & Setup Documentation</a>
-            </div>
-          </div>
-        );
-      } else {
-        setError("AI Services are unavailable in this environment. No API key found.");
+    // Check if we need to select a key first
+    if (!process.env.API_KEY && window.aistudio) {
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      if (!hasKey) {
+        await window.aistudio.openSelectKey();
+        // After opening the dialog, we assume the key will be injected and proceed
       }
-      return;
     }
 
     setIsProcessing(true);
     setError(null);
     
     try {
-      // Create instance right before call as per guidelines
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Create a new instance right before making an API call as per guidelines
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
       const base64Data = await fileToBase64(selectedFile);
 
       const prompt = `Task: Extract the main subject of this image and remove the background completely.
-      Instructions: Return a high-quality PNG with alpha transparency containing only the subject.`;
+      Instructions: Output a high-quality PNG with alpha transparency. Detect the primary subject accurately.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
@@ -124,25 +105,28 @@ const BackgroundRemover: React.FC = () => {
         }
       }
 
-      if (!foundImage) throw new Error("AI subject detection failed.");
+      if (!foundImage) throw new Error("No image was returned. Try an image with a more distinct subject.");
     } catch (err: any) {
       console.error('BG Removal failed:', err);
       const msg = err.message || "";
       if (msg.includes("API Key") || msg.includes("403") || msg.includes("entity was not found")) {
          setError(
-           <div className="text-center py-4">
-             <p className="font-bold text-red-600 mb-2">Authentication Failed</p>
-             <p className="text-xs mb-4">The selected project key is invalid or doesn't have a billing account.</p>
+           <div className="space-y-4 py-2 text-center">
+             <p className="font-bold text-red-600">Authentication Required</p>
+             <p className="text-xs text-slate-500">To use AI tools, you must connect a valid project with billing enabled.</p>
              <button 
-               onClick={() => window.aistudio?.openSelectKey()}
-               className="px-6 py-2 bg-red-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg"
+               onClick={() => window.aistudio?.openSelectKey().then(handleRemoveBackground)}
+               className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg"
              >
-               Change Project Key
+               Connect Project Key
              </button>
+             <div className="mt-2 text-[9px] text-slate-400">
+               <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="underline hover:text-indigo-500">Billing Documentation</a>
+             </div>
            </div>
          );
       } else {
-        setError("Processing failed. Please try an image with a clearer subject.");
+        setError("Processing failed. Please ensure your image is under 10MB and has a clear subject.");
       }
     } finally {
       setIsProcessing(false);
@@ -250,7 +234,7 @@ const BackgroundRemover: React.FC = () => {
               onClick={handleRemoveBackground} 
               className="group w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-black py-6 rounded-[32px] shadow-2xl shadow-indigo-500/30 transition-all hover:scale-[1.02] relative overflow-hidden"
             >
-               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
                <div className="flex items-center justify-center space-x-4">
                  <i className="fa-solid fa-scissors text-lg group-hover:rotate-12 transition-transform"></i> 
                  <span className="text-lg">Remove Background Now</span>
