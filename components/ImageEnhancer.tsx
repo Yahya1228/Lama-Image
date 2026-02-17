@@ -84,21 +84,6 @@ const ImageEnhancer: React.FC = () => {
   const handleEnhance = async () => {
     if (!selectedFile) return;
 
-    // Trigger key selection if missing (Mandatory for Pro models)
-    if (!process.env.API_KEY && window.aistudio) {
-      await handleOpenKeyDialog();
-    }
-
-    if (!process.env.API_KEY && !window.aistudio) {
-      setError(
-        <div className="text-center py-4 space-y-2">
-          <p className="font-bold text-red-600">API_KEY Missing</p>
-          <p className="text-xs text-slate-500 leading-relaxed">This tool requires a Google Cloud API Key. Please add it to your environment variables or run in AI Studio.</p>
-        </div>
-      );
-      return;
-    }
-
     setIsProcessing(true);
     setError(null);
     
@@ -153,19 +138,28 @@ const ImageEnhancer: React.FC = () => {
     } catch (err: any) {
       console.error('Enhancement failed:', err);
       const msg = err.message || "";
-      if (msg.includes("API Key") || msg.includes("403") || msg.includes("entity was not found")) {
-        setError(
-          <div className="text-center py-4 space-y-4">
-            <p className="font-black text-red-600 uppercase tracking-tight">Access Restricted</p>
-            <p className="text-[11px] leading-relaxed text-slate-600">The current project key is either invalid or lacks billing permissions for Gemini 3 Pro.</p>
-            <button 
-              onClick={() => handleOpenKeyDialog().then(handleEnhance)} 
-              className="px-8 py-3 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl"
-            >
-              Update Project Key
-            </button>
-          </div>
-        );
+      if (msg.includes("API Key") || msg.includes("403") || msg.includes("entity was not found") || !process.env.API_KEY) {
+        if (window.aistudio) {
+          setError(
+            <div className="text-center py-4 space-y-4">
+              <p className="font-black text-amber-600 uppercase tracking-tight">Cloud Connection Required</p>
+              <p className="text-[11px] leading-relaxed text-slate-600">Gemini 3 Pro requires an authorized project key with billing enabled.</p>
+              <button 
+                onClick={() => handleOpenKeyDialog().then(handleEnhance)} 
+                className="px-8 py-3 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl"
+              >
+                Connect Project Key
+              </button>
+            </div>
+          );
+        } else {
+          setError(
+            <div className="text-center py-4 space-y-2">
+              <p className="font-black text-red-600 uppercase tracking-tight">API Configuration Missing</p>
+              <p className="text-[11px] leading-relaxed text-slate-600">The API_KEY is not set. For external deployments, please configure your environment variables.</p>
+            </div>
+          );
+        }
       } else {
         setError(`AI Restoration failed: ${msg || "Ensure file size is under 10MB."}`);
       }

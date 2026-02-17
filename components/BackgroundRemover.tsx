@@ -56,40 +56,12 @@ const BackgroundRemover: React.FC = () => {
   const handleRemoveBackground = async () => {
     if (!selectedFile) return;
 
-    // Check for API Key presence
-    if (!process.env.API_KEY) {
-      if (window.aistudio) {
-        // If in AI Studio, open the selection dialog
-        await window.aistudio.openSelectKey();
-        setError(
-          <div className="text-center py-4 space-y-3">
-            <p className="font-bold text-indigo-600">Connect to AI Studio</p>
-            <p className="text-xs text-slate-500 leading-relaxed">Please select a Google Cloud project in the dialog to continue.</p>
-            <button 
-              onClick={handleRemoveBackground}
-              className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg"
-            >
-              Continue After Selection
-            </button>
-          </div>
-        );
-      } else {
-        // If on Vercel or standalone
-        setError(
-          <div className="text-center py-4 space-y-2">
-            <p className="font-bold text-red-600">Configuration Required</p>
-            <p className="text-xs text-slate-500 leading-relaxed">The API_KEY environment variable is missing. For Vercel deployments, please add the key in your project settings.</p>
-          </div>
-        );
-      }
-      return;
-    }
-
     setIsProcessing(true);
     setError(null);
     
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Use the provided API KEY. If missing, the SDK will throw an error we catch below.
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
       const base64Data = await fileToBase64(selectedFile);
 
       const prompt = `Task: Extract the main subject of this image and remove the background completely. Return only the isolated subject as a high-quality PNG with transparency.`;
@@ -128,19 +100,29 @@ const BackgroundRemover: React.FC = () => {
       console.error('BG Removal failed:', err);
       const msg = err.message || "";
       
-      if (msg.includes("API Key") || msg.includes("403") || msg.includes("entity was not found")) {
-         setError(
-           <div className="space-y-4 py-2 text-center">
-             <p className="font-bold text-red-600 uppercase tracking-tight">Access Error</p>
-             <p className="text-xs text-slate-500">The current API key is not valid or project billing is disabled.</p>
-             <button 
-               onClick={() => window.aistudio?.openSelectKey().then(handleRemoveBackground)}
-               className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg"
-             >
-               Change Project Key
-             </button>
-           </div>
-         );
+      // Handle Authentication or missing project errors
+      if (msg.includes("API Key") || msg.includes("403") || msg.includes("entity was not found") || !process.env.API_KEY) {
+         if (window.aistudio) {
+           setError(
+             <div className="space-y-4 py-2 text-center">
+               <p className="font-bold text-indigo-600 uppercase tracking-tight">Project Connection Required</p>
+               <p className="text-xs text-slate-500">Please connect a valid Google Cloud project to enable AI tools.</p>
+               <button 
+                 onClick={() => window.aistudio?.openSelectKey().then(handleRemoveBackground)}
+                 className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg"
+               >
+                 Connect Project Key
+               </button>
+             </div>
+           );
+         } else {
+           setError(
+             <div className="space-y-2 py-2 text-center">
+               <p className="font-bold text-red-600 uppercase tracking-tight">API Configuration Error</p>
+               <p className="text-xs text-slate-500">The API_KEY is missing or invalid. Please ensure it is set in your Vercel/Environment settings.</p>
+             </div>
+           );
+         }
       } else {
         setError(`Processing error: ${msg || "Try a clearer image."}`);
       }
