@@ -36,9 +36,9 @@ const Footer: React.FC = () => {
           <div>
             <h4 className="font-bold text-slate-800 dark:text-white mb-6 uppercase tracking-wider text-xs">Tools</h4>
             <ul className="space-y-4">
-              <li><a href="#" className="text-slate-500 dark:text-slate-400 hover:text-primary-500 transition-colors text-sm">Image Compressor</a></li>
-              <li><a href="#" className="text-slate-500 dark:text-slate-400 hover:text-primary-500 transition-colors text-sm">Image Enhancer</a></li>
-              <li><a href="#" className="text-slate-500 dark:text-slate-400 hover:text-primary-500 transition-colors text-sm">Batch Processing</a></li>
+              <li><Link to="/?tool=compress" className="text-slate-500 dark:text-slate-400 hover:text-primary-500 transition-colors text-sm">Image Compressor</Link></li>
+              <li><Link to="/?tool=enhance" className="text-slate-500 dark:text-slate-400 hover:text-primary-500 transition-colors text-sm">Image Enhancer</Link></li>
+              <li><Link to="/?tool=remove-bg" className="text-slate-500 dark:text-slate-400 hover:text-primary-500 transition-colors text-sm">Background Remover</Link></li>
               <li><a href="#" className="text-slate-500 dark:text-slate-400 hover:text-primary-500 transition-colors text-sm">API for Devs</a></li>
             </ul>
           </div>

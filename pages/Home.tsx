@@ -3,13 +3,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import ImageCompressor from '../components/ImageCompressor';
 import ImageEnhancer from '../components/ImageEnhancer';
+import BackgroundRemover from '../components/BackgroundRemover';
 import ReviewCard from '../components/ReviewCard';
 import ReviewForm from '../components/ReviewForm';
 import { Feature, Review } from '../types';
 import { supabase } from '../lib/supabase';
 
 const Home: React.FC = () => {
-  const [activeTool, setActiveTool] = useState<'none' | 'compress' | 'enhance'>('none');
+  const [activeTool, setActiveTool] = useState<'none' | 'compress' | 'enhance' | 'remove-bg'>('none');
   const [reviews, setReviews] = useState<Review[]>([]);
   const [searchParams] = useSearchParams();
   const toolRef = useRef<HTMLDivElement>(null);
@@ -62,8 +63,8 @@ const Home: React.FC = () => {
 
   useEffect(() => {
     const toolParam = searchParams.get('tool');
-    if (toolParam === 'compress' || toolParam === 'enhance') {
-      setActiveTool(toolParam as 'compress' | 'enhance');
+    if (toolParam === 'compress' || toolParam === 'enhance' || toolParam === 'remove-bg') {
+      setActiveTool(toolParam as 'compress' | 'enhance' | 'remove-bg');
       setTimeout(() => {
         toolRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 300);
@@ -76,7 +77,7 @@ const Home: React.FC = () => {
     reviewsSection?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const scrollToTool = (tool: 'compress' | 'enhance') => {
+  const scrollToTool = (tool: 'compress' | 'enhance' | 'remove-bg') => {
     setActiveTool(tool);
     setTimeout(() => {
       toolRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -101,32 +102,38 @@ const Home: React.FC = () => {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="inline-flex items-center space-x-2 px-4 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-slate-500 dark:text-slate-400 text-xs font-bold mb-8 shadow-sm">
-            <span className="flex h-2 w-2 rounded-full bg-primary-500 animate-pulse"></span>
-            <span>Next-gen AI Image Processing Engine</span>
+            <span className="flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
+            <span>Next-gen AI Subject Extraction Engine</span>
           </div>
           
           <h1 className="text-5xl lg:text-7xl font-black text-slate-900 dark:text-white leading-[1.1] tracking-tight mb-8">
-            Transform Your Images <br />
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary-600 to-sky-400">In Seconds</span>
+            Professional AI Tools <br />
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-primary-400">For Every Pixel</span>
           </h1>
           
           <p className="max-w-2xl mx-auto text-lg lg:text-xl text-slate-500 dark:text-slate-400 mb-12 leading-relaxed">
-            Shrink, sharpen, and enhance your images instantly — no signup required, fully free, and incredibly fast.
+            Shrink, sharpen, and remove backgrounds instantly — no signup required, fully free, and incredibly fast.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
+          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6">
             <button 
               onClick={() => scrollToTool('compress')}
-              className="group w-full sm:w-auto px-10 py-4 bg-primary-600 hover:bg-primary-700 text-white font-black rounded-2xl shadow-xl shadow-primary-500/20 hover:shadow-primary-500/40 flex items-center justify-center transition-all hover:scale-105 hover:-translate-y-1 active:scale-95 overflow-hidden relative"
+              className="group w-full sm:w-auto px-8 py-4 bg-primary-600 hover:bg-primary-700 text-white font-black rounded-2xl shadow-xl shadow-primary-500/20 flex items-center justify-center transition-all hover:scale-105 active:scale-95 overflow-hidden relative"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
-              <i className="fa-solid fa-compress mr-2 opacity-80 group-hover:opacity-100 transition-opacity"></i> Compress Image
+              <i className="fa-solid fa-compress mr-2"></i> Compress
             </button>
             <button 
               onClick={() => scrollToTool('enhance')}
-              className="group w-full sm:w-auto px-10 py-4 bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 font-black rounded-2xl shadow-sm hover:shadow-xl hover:shadow-amber-500/10 flex items-center justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-750 hover:scale-105 hover:-translate-y-1 active:scale-95"
+              className="group w-full sm:w-auto px-8 py-4 bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 font-black rounded-2xl shadow-sm hover:shadow-xl flex items-center justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-750 hover:scale-105 active:scale-95"
             >
-              <i className="fa-solid fa-wand-magic-sparkles mr-2 text-amber-500 group-hover:rotate-12 transition-transform"></i> AI Enhancer
+              <i className="fa-solid fa-wand-magic-sparkles mr-2 text-amber-500"></i> AI Enhancer
+            </button>
+            <button 
+              onClick={() => scrollToTool('remove-bg')}
+              className="group w-full sm:w-auto px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-xl shadow-indigo-500/20 flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+            >
+              <i className="fa-solid fa-scissors mr-2"></i> Remove BG
             </button>
           </div>
         </div>
@@ -137,22 +144,28 @@ const Home: React.FC = () => {
         <section ref={toolRef} className="pb-24 px-4 sm:px-6 lg:px-8 bg-white dark:bg-slate-900 animate-in fade-in slide-in-from-bottom-8 duration-700">
           <div className="max-w-4xl mx-auto">
             <div className="flex justify-center mb-10">
-              <div className="bg-slate-100 dark:bg-slate-800 p-1.5 rounded-[22px] inline-flex border border-slate-200 dark:border-slate-700 shadow-inner">
+              <div className="bg-slate-100 dark:bg-slate-800 p-1.5 rounded-[22px] inline-flex border border-slate-200 dark:border-slate-700 shadow-inner overflow-x-auto max-w-full">
                 <button 
                   onClick={() => setActiveTool('compress')}
-                  className={`px-8 py-2.5 rounded-[18px] text-sm font-bold transition-all ${activeTool === 'compress' ? 'bg-white dark:bg-slate-700 shadow-sm text-primary-600 dark:text-primary-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                  className={`px-6 py-2.5 rounded-[18px] text-sm font-bold transition-all whitespace-nowrap ${activeTool === 'compress' ? 'bg-white dark:bg-slate-700 shadow-sm text-primary-600 dark:text-primary-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                 >
                   Compress
                 </button>
                 <button 
                   onClick={() => setActiveTool('enhance')}
-                  className={`px-8 py-2.5 rounded-[18px] text-sm font-bold transition-all ${activeTool === 'enhance' ? 'bg-white dark:bg-slate-700 shadow-sm text-amber-500' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                  className={`px-6 py-2.5 rounded-[18px] text-sm font-bold transition-all whitespace-nowrap ${activeTool === 'enhance' ? 'bg-white dark:bg-slate-700 shadow-sm text-amber-500' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                 >
                   Enhance
                 </button>
+                <button 
+                  onClick={() => setActiveTool('remove-bg')}
+                  className={`px-6 py-2.5 rounded-[18px] text-sm font-bold transition-all whitespace-nowrap ${activeTool === 'remove-bg' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-500' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                >
+                  Remove BG
+                </button>
               </div>
             </div>
-            {activeTool === 'compress' ? <ImageCompressor /> : <ImageEnhancer />}
+            {activeTool === 'compress' ? <ImageCompressor /> : activeTool === 'enhance' ? <ImageEnhancer /> : <BackgroundRemover />}
           </div>
         </section>
       )}

@@ -80,6 +80,28 @@ const Library: React.FC = () => {
     }
   };
 
+  const getBadgeStyles = (type: string) => {
+    switch (type) {
+      case 'compressed':
+        return 'bg-primary-500 text-white';
+      case 'enhanced':
+        return 'bg-amber-500 text-white';
+      case 'bg-removed':
+        return 'bg-indigo-600 text-white';
+      default:
+        return 'bg-slate-500 text-white';
+    }
+  };
+
+  const getLabel = (type: string) => {
+    switch (type) {
+      case 'compressed': return 'Compressed';
+      case 'enhanced': return 'Enhanced';
+      case 'bg-removed': return 'BG Removed';
+      default: return type;
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-slate-900 min-h-screen py-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -120,6 +142,11 @@ const Library: React.FC = () => {
                 className="group bg-white dark:bg-slate-800 rounded-[32px] overflow-hidden border border-slate-100 dark:border-slate-700 hover:shadow-2xl transition-all duration-500 animate-in fade-in slide-in-from-bottom-4"
               >
                 <div className="aspect-square relative overflow-hidden bg-slate-100 dark:bg-slate-900">
+                  {/* Checkerboard for transparency visibility */}
+                  {image.type === 'bg-removed' && (
+                    <div className="absolute inset-0 opacity-10 dark:opacity-5 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#000 10%, transparent 10%)', backgroundSize: '10px 10px' }}></div>
+                  )}
+                  
                   <img 
                     src={image.url} 
                     alt={image.name} 
@@ -130,8 +157,8 @@ const Library: React.FC = () => {
                   />
                   
                   <div className="absolute top-4 left-4">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-xl ${image.type === 'compressed' ? 'bg-primary-500' : 'bg-amber-500'}`}>
-                      {image.type}
+                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-xl ${getBadgeStyles(image.type)}`}>
+                      {getLabel(image.type)}
                     </span>
                   </div>
                   

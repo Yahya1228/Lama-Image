@@ -13,7 +13,7 @@ export interface SavedImage {
   id: string;
   name: string;
   url: string;
-  type: 'compressed' | 'enhanced';
+  type: 'compressed' | 'enhanced' | 'bg-removed';
   date: string;
   size?: string;
 }
