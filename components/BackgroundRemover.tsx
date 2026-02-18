@@ -26,8 +26,18 @@ const BackgroundRemover: React.FC = () => {
       setIsLoggedIn(!!session);
     });
 
+    // Initial check for key selection
+    checkKeyStatus();
+
     return () => subscription.unsubscribe();
   }, []);
+
+  const checkKeyStatus = async () => {
+    if (window.aistudio) {
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      setNeedsKeySelection(!hasKey);
+    }
+  };
 
   const fileToBase64 = (file: File | Blob): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -51,7 +61,7 @@ const BackgroundRemover: React.FC = () => {
       setIsDone(false);
       setIsSaved(false);
       setError(null);
-      setNeedsKeySelection(false);
+      checkKeyStatus();
     }
   };
 
@@ -59,10 +69,12 @@ const BackgroundRemover: React.FC = () => {
     if (window.aistudio) {
       try {
         await window.aistudio.openSelectKey();
+        // Per instructions, assume success to mitigate race conditions
         setNeedsKeySelection(false);
         setError(null);
-        // Automatically retry after selection
-        if (selectedFile) handleRemoveBackground();
+        if (selectedFile) {
+          handleRemoveBackground();
+        }
       } catch (e) {
         console.error("Key selection failed", e);
       }
@@ -72,14 +84,33 @@ const BackgroundRemover: React.FC = () => {
   const handleRemoveBackground = async () => {
     if (!selectedFile) return;
 
+    // Check if we have a key before starting
+    if (window.aistudio) {
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      if (!hasKey) {
+        setNeedsKeySelection(true);
+        setError(
+          <div className="text-center py-2 space-y-3">
+            <p className="font-bold text-amber-600 uppercase tracking-wider">Onboarding Required</p>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              To use AI Subject Extraction, you must connect a Google Cloud Project with billing enabled.
+            </p>
+            <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary-500 hover:underline">Learn about Gemini API billing</a>
+          </div>
+        );
+        return;
+      }
+    }
+
     setIsProcessing(true);
     setError(null);
     
     try {
+      // Re-initialize AI client to ensure we use the latest injected API key
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
       const base64Data = await fileToBase64(selectedFile);
 
-      const prompt = `Task: Extract the main subject and remove the background. Return only a transparent PNG.`;
+      const prompt = `Task: Extract the main subject and remove the background. Return only a transparent PNG. Ensure the edges are clean.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
@@ -110,27 +141,29 @@ const BackgroundRemover: React.FC = () => {
         }
       }
 
-      if (!foundImage) throw new Error("No processed image returned from AI.");
+      if (!foundImage) throw new Error("The AI model did not return a valid subject mask.");
     } catch (err: any) {
       console.error('BG Removal error:', err);
       const msg = err.message || "";
       const isAuthError = msg.toLowerCase().includes("permission denied") || 
                           msg.toLowerCase().includes("api key") || 
                           msg.toLowerCase().includes("requested entity was not found") ||
-                          msg.toLowerCase().includes("403");
+                          msg.toLowerCase().includes("403") ||
+                          msg.toLowerCase().includes("not found");
 
       if (isAuthError) {
         setNeedsKeySelection(true);
         setError(
           <div className="text-center py-2 space-y-3">
-            <p className="font-bold text-red-600">Authentication Required</p>
+            <p className="font-black text-red-600 uppercase">Authentication Failure</p>
             <p className="text-[11px] text-slate-500 leading-relaxed">
-              Subject extraction requires a Google Cloud project with active billing. Your current session key has insufficient permissions.
+              The API request failed with a project permission error. This tool requires a Google Cloud project with an active billing account.
             </p>
+            <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary-500 hover:underline">Check billing requirements</a>
           </div>
         );
       } else {
-        setError(`AI Error: ${msg || "Try a different image."}`);
+        setError(`Processing failed: ${msg || "An unexpected error occurred. Please try a different image."}`);
       }
     } finally {
       setIsProcessing(false);
@@ -175,7 +208,7 @@ const BackgroundRemover: React.FC = () => {
     setIsDone(false);
     setIsSaved(false);
     setError(null);
-    setNeedsKeySelection(false);
+    checkKeyStatus();
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -215,12 +248,27 @@ const BackgroundRemover: React.FC = () => {
               {needsKeySelection && window.aistudio && (
                 <button 
                   onClick={handleOpenKeySelection}
-                  className="mt-4 w-full py-4 bg-indigo-600 text-white font-black rounded-2xl shadow-xl hover:bg-indigo-700 transition-all active:scale-95"
+                  className="mt-4 w-full py-4 bg-indigo-600 text-white font-black rounded-2xl shadow-xl hover:bg-indigo-700 transition-all active:scale-95 flex items-center justify-center space-x-2"
                 >
-                  Connect Paid Project Key
+                  <i className="fa-solid fa-key text-xs"></i>
+                  <span>Select Paid Project Key</span>
                 </button>
               )}
             </div>
+          )}
+
+          {!error && needsKeySelection && (
+             <div className="p-6 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-[32px] flex flex-col items-center text-center">
+                <i className="fa-solid fa-circle-info text-indigo-500 mb-3 text-xl"></i>
+                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Onboarding Needed</p>
+                <p className="text-xs text-slate-500 mt-1 mb-4">You need to select a paid project key to use background removal.</p>
+                <button 
+                  onClick={handleOpenKeySelection}
+                  className="w-full py-3 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 rounded-xl text-xs font-black text-indigo-600 dark:text-indigo-400 shadow-sm hover:shadow-md transition-all"
+                >
+                  Connect Key
+                </button>
+             </div>
           )}
 
           <div className="relative group rounded-[32px] overflow-hidden bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 aspect-video flex items-center justify-center shadow-inner">
@@ -242,7 +290,7 @@ const BackgroundRemover: React.FC = () => {
             )}
           </div>
 
-          {!isDone && !isProcessing && !needsKeySelection && (
+          {!isDone && !isProcessing && !needsKeySelection && !error && (
             <button 
               onClick={handleRemoveBackground} 
               className="group w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-black py-6 rounded-[32px] shadow-2xl shadow-indigo-500/30 transition-all hover:scale-[1.02] relative overflow-hidden"

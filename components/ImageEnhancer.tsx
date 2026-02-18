@@ -27,8 +27,17 @@ const ImageEnhancer: React.FC = () => {
       setIsLoggedIn(!!session);
     });
 
+    checkKeyStatus();
+
     return () => subscription.unsubscribe();
   }, []);
+
+  const checkKeyStatus = async () => {
+    if (window.aistudio) {
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      setNeedsKeySelection(!hasKey);
+    }
+  };
 
   const fileToBase64 = (file: File | Blob): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -52,7 +61,7 @@ const ImageEnhancer: React.FC = () => {
       setIsDone(false);
       setIsSaved(false);
       setError(null);
-      setNeedsKeySelection(false);
+      checkKeyStatus();
     }
   };
 
@@ -72,18 +81,31 @@ const ImageEnhancer: React.FC = () => {
   const handleEnhance = async () => {
     if (!selectedFile) return;
 
+    if (window.aistudio) {
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      if (!hasKey) {
+        setNeedsKeySelection(true);
+        setError(
+          <div className="text-center py-2 space-y-3">
+            <p className="font-bold text-amber-600 uppercase">Action Required</p>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              AI Image Enhancement requires a Google Cloud project key with active billing enabled.
+            </p>
+          </div>
+        );
+        return;
+      }
+    }
+
     setIsProcessing(true);
     setError(null);
-    setNeedsKeySelection(false);
     
     try {
-      // Using gemini-2.5-flash-image for reliable, faster processing with less frequent 403s
+      // Re-initialize for every call as per instructions
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
       const base64Data = await fileToBase64(selectedFile);
 
-      const prompt = `Task: Professional AI Image Enhancement. 
-      Intensity Level: ${intensity}%. 
-      Instructions: Upscale and restore details, sharpen edges, and remove noise. Maintain natural colors. Return the result as the original image type or PNG.`;
+      const prompt = `Task: Professional AI Image Enhancement. Intensity Level: ${intensity}%. Instructions: Upscale and restore details, sharpen edges, and remove noise. Return a high-quality result.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
@@ -114,14 +136,15 @@ const ImageEnhancer: React.FC = () => {
         }
       }
 
-      if (!foundImage) throw new Error("AI did not return an image part.");
+      if (!foundImage) throw new Error("The AI engine failed to return an enhanced image part.");
     } catch (err: any) {
       console.error('Enhancement error:', err);
       const msg = err.message || "";
       const isAuthError = msg.toLowerCase().includes("permission denied") || 
                           msg.toLowerCase().includes("api key") || 
                           msg.toLowerCase().includes("requested entity was not found") ||
-                          msg.toLowerCase().includes("403");
+                          msg.toLowerCase().includes("403") ||
+                          msg.toLowerCase().includes("not found");
 
       if (isAuthError) {
         setNeedsKeySelection(true);
@@ -129,8 +152,9 @@ const ImageEnhancer: React.FC = () => {
           <div className="text-center py-2 space-y-3">
             <p className="font-black text-red-600 uppercase">Access Denied</p>
             <p className="text-[11px] text-slate-500 leading-relaxed">
-              The API call failed with a permission error. This usually requires selecting a Google Cloud project with billing enabled in AI Studio.
+              Authentication failed. Please select a Google Cloud project with an active billing account in the AI Studio dialog.
             </p>
+            <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary-500 hover:underline">Billing Documentation</a>
           </div>
         );
       } else {
@@ -180,7 +204,7 @@ const ImageEnhancer: React.FC = () => {
     setIsDone(false);
     setIsSaved(false);
     setError(null);
-    setNeedsKeySelection(false);
+    checkKeyStatus();
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -220,12 +244,27 @@ const ImageEnhancer: React.FC = () => {
               {needsKeySelection && window.aistudio && (
                 <button 
                   onClick={handleOpenKeySelection}
-                  className="mt-4 w-full py-4 bg-slate-800 text-white font-black rounded-2xl shadow-xl hover:bg-black transition-all active:scale-95"
+                  className="mt-4 w-full py-4 bg-slate-800 text-white font-black rounded-2xl shadow-xl hover:bg-black transition-all active:scale-95 flex items-center justify-center space-x-2"
                 >
-                  Connect Project Key
+                  <i className="fa-solid fa-key text-xs"></i>
+                  <span>Select Paid Project Key</span>
                 </button>
               )}
             </div>
+          )}
+
+          {!error && needsKeySelection && (
+             <div className="p-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-[32px] flex flex-col items-center text-center">
+                <i className="fa-solid fa-circle-info text-amber-500 mb-3 text-xl"></i>
+                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Onboarding Needed</p>
+                <p className="text-xs text-slate-500 mt-1 mb-4">You must select a paid project key to use AI Image Enhancement.</p>
+                <button 
+                  onClick={handleOpenKeySelection}
+                  className="w-full py-3 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 rounded-xl text-xs font-black text-amber-600 dark:text-amber-400 shadow-sm hover:shadow-md transition-all"
+                >
+                  Connect Key
+                </button>
+             </div>
           )}
 
           <div className="relative group rounded-[32px] overflow-hidden bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 aspect-video flex items-center justify-center shadow-inner">
@@ -275,7 +314,7 @@ const ImageEnhancer: React.FC = () => {
             </div>
           </div>
 
-          {!isDone && !isProcessing && !needsKeySelection && (
+          {!isDone && !isProcessing && !needsKeySelection && !error && (
             <button 
               onClick={handleEnhance} 
               className="group w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black py-6 rounded-[32px] shadow-2xl shadow-amber-500/30 transition-all hover:scale-[1.02] relative overflow-hidden"
