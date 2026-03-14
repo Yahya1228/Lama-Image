@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { GoogleGenAI } from "@google/genai";
+import { removeBackground } from '@imgly/background-removal';
 
 const BackgroundRemover: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -14,7 +14,6 @@ const BackgroundRemover: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [error, setError] = useState<React.ReactNode | null>(null);
-  const [needsKeySelection, setNeedsKeySelection] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -26,30 +25,8 @@ const BackgroundRemover: React.FC = () => {
       setIsLoggedIn(!!session);
     });
 
-    // Initial check for key selection
-    checkKeyStatus();
-
     return () => subscription.unsubscribe();
   }, []);
-
-  const checkKeyStatus = async () => {
-    if (window.aistudio) {
-      const hasKey = await window.aistudio.hasSelectedApiKey();
-      setNeedsKeySelection(!hasKey);
-    }
-  };
-
-  const fileToBase64 = (file: File | Blob): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        const base64String = (reader.result as string).split(',')[1];
-        resolve(base64String);
-      };
-      reader.onerror = (error) => reject(error);
-    });
-  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -61,110 +38,75 @@ const BackgroundRemover: React.FC = () => {
       setIsDone(false);
       setIsSaved(false);
       setError(null);
-      checkKeyStatus();
-    }
-  };
-
-  const handleOpenKeySelection = async () => {
-    if (window.aistudio) {
-      try {
-        await window.aistudio.openSelectKey();
-        // Per instructions, assume success to mitigate race conditions
-        setNeedsKeySelection(false);
-        setError(null);
-        if (selectedFile) {
-          handleRemoveBackground();
-        }
-      } catch (e) {
-        console.error("Key selection failed", e);
-      }
     }
   };
 
   const handleRemoveBackground = async () => {
     if (!selectedFile) return;
 
-    // Check if we have a key before starting
-    if (window.aistudio) {
-      const hasKey = await window.aistudio.hasSelectedApiKey();
-      if (!hasKey) {
-        setNeedsKeySelection(true);
-        setError(
-          <div className="text-center py-2 space-y-3">
-            <p className="font-bold text-amber-600 uppercase tracking-wider">Onboarding Required</p>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              To use AI Subject Extraction, you must connect a Google Cloud Project with billing enabled.
-            </p>
-            <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary-500 hover:underline">Learn about Gemini API billing</a>
-          </div>
-        );
-        return;
-      }
-    }
-
     setIsProcessing(true);
     setError(null);
     
     try {
-      // Re-initialize AI client to ensure we use the latest injected API key
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-      const base64Data = await fileToBase64(selectedFile);
-
-      const prompt = `Task: Extract the main subject and remove the background. Return only a transparent PNG. Ensure the edges are clean.`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: {
-          parts: [
-            { inlineData: { data: base64Data, mimeType: selectedFile.type } },
-            { text: prompt }
-          ]
-        }
+      // Optimization: Downscale large images before processing to speed up AI inference
+      // Most background removal tasks don't need full resolution to generate a high-quality mask
+      let fileToProcess: File | Blob = selectedFile;
+      
+      const MAX_DIMENSION = 1200; // Good balance between speed and quality
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(selectedFile);
+      
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = objectUrl;
       });
 
-      let foundImage = false;
-      const candidate = response.candidates?.[0];
-      if (candidate?.content?.parts) {
-        for (const part of candidate.content.parts) {
-          if (part.inlineData) {
-            const base64Res = part.inlineData.data;
-            const resDataUrl = `data:${part.inlineData.mimeType};base64,${base64Res}`;
-            const res = await fetch(resDataUrl);
-            const blob = await res.blob();
-            
-            setResultBlob(blob);
-            setResultUrl(resDataUrl);
-            setIsDone(true);
-            foundImage = true;
-            break;
+      if (img.width > MAX_DIMENSION || img.height > MAX_DIMENSION) {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_DIMENSION) {
+            height *= MAX_DIMENSION / width;
+            width = MAX_DIMENSION;
+          }
+        } else {
+          if (height > MAX_DIMENSION) {
+            width *= MAX_DIMENSION / height;
+            height = MAX_DIMENSION;
           }
         }
-      }
 
-      if (!foundImage) throw new Error("The AI model did not return a valid subject mask.");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        fileToProcess = await new Promise<Blob>((resolve) => {
+          canvas.toBlob((blob) => resolve(blob!), 'image/png');
+        });
+      }
+      
+      URL.revokeObjectURL(objectUrl);
+
+      const blob = await removeBackground(fileToProcess, {
+        model: 'small',
+        device: 'gpu',
+        proxyToWorker: true,
+        progress: (status: string, progress: number) => {
+          console.log(status, progress);
+        }
+      });
+      
+      const url = URL.createObjectURL(blob);
+      setResultBlob(blob);
+      setResultUrl(url);
+      setIsDone(true);
     } catch (err: any) {
-      console.error('BG Removal error:', err);
-      const msg = err.message || "";
-      const isAuthError = msg.toLowerCase().includes("permission denied") || 
-                          msg.toLowerCase().includes("api key") || 
-                          msg.toLowerCase().includes("requested entity was not found") ||
-                          msg.toLowerCase().includes("403") ||
-                          msg.toLowerCase().includes("not found");
-
-      if (isAuthError) {
-        setNeedsKeySelection(true);
-        setError(
-          <div className="text-center py-2 space-y-3">
-            <p className="font-black text-red-600 uppercase">Authentication Failure</p>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              The API request failed with a project permission error. This tool requires a Google Cloud project with an active billing account.
-            </p>
-            <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary-500 hover:underline">Check billing requirements</a>
-          </div>
-        );
-      } else {
-        setError(`Processing failed: ${msg || "An unexpected error occurred. Please try a different image."}`);
-      }
+      console.error('Extraction failure:', err);
+      setError(`Processing failed: ${err.message || "An unexpected error occurred."}`);
     } finally {
       setIsProcessing(false);
     }
@@ -180,17 +122,21 @@ const BackgroundRemover: React.FC = () => {
       const fileName = `${Date.now()}_nobg_${selectedFile.name.split('.')[0]}.png`;
       const filePath = `${session.user.id}/${fileName}`;
 
-      await supabase.storage.from('images').upload(filePath, resultBlob);
+      const { error: uploadError } = await supabase.storage.from('images').upload(filePath, resultBlob);
+      if (uploadError) throw uploadError;
+
       const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(filePath);
 
-      await supabase.from('images').insert([{
+      const { error: dbError } = await supabase.from('images').insert([{
         user_id: session.user.id,
-        name: fileName,
+        name: selectedFile.name,
         url: publicUrl,
         type: 'bg-removed',
         date: new Date().toISOString(),
         size: `${(resultBlob.size / 1024).toFixed(1)} KB`
       }]);
+
+      if (dbError) throw dbError;
 
       setIsSaved(true);
     } catch (err: any) {
@@ -203,12 +149,12 @@ const BackgroundRemover: React.FC = () => {
   const clear = () => {
     setSelectedFile(null);
     setPreviewUrl(null);
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
     setResultUrl(null);
     setResultBlob(null);
     setIsDone(false);
     setIsSaved(false);
     setError(null);
-    checkKeyStatus();
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -217,13 +163,13 @@ const BackgroundRemover: React.FC = () => {
       <div className="flex items-center justify-between mb-8">
         <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center">
           <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center mr-4 text-indigo-600">
-             <i className="fa-solid fa-person-rays text-lg"></i>
+             <i className="fa-solid fa-scissors text-lg"></i>
           </div>
-          Background Remover
+          AI Background Remover
         </h3>
         <div className="flex items-center space-x-2">
            <span className="text-[9px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-full border border-indigo-100 dark:border-indigo-800">
-             <i className="fa-solid fa-wand-magic-sparkles mr-1"></i> AI Subject Engine
+             <i className="fa-solid fa-microchip mr-1"></i> Neural Engine
            </span>
         </div>
       </div>
@@ -235,52 +181,29 @@ const BackgroundRemover: React.FC = () => {
         >
           <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
           <div className="w-24 h-24 bg-indigo-50 dark:bg-indigo-900/20 rounded-[32px] flex items-center justify-center mx-auto mb-8 group-hover:scale-110 transition-transform duration-500 shadow-sm">
-            <i className="fa-solid fa-scissors text-indigo-500 text-4xl"></i>
+            <i className="fa-solid fa-person-rays text-indigo-500 text-4xl"></i>
           </div>
-          <p className="text-2xl text-slate-700 dark:text-slate-200 font-black mb-2">Remove Background</p>
-          <p className="text-slate-400 text-sm font-medium">Auto-detect subjects and create transparent PNGs</p>
+          <p className="text-2xl text-slate-700 dark:text-slate-200 font-black mb-2">Upload Photo</p>
+          <p className="text-slate-400 text-sm font-medium">Isolate subject with local AI</p>
         </div>
       ) : (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {error && (
             <div className="p-6 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-[32px] text-slate-800 dark:text-slate-200 shadow-sm animate-in zoom-in-95">
               {error}
-              {needsKeySelection && window.aistudio && (
-                <button 
-                  onClick={handleOpenKeySelection}
-                  className="mt-4 w-full py-4 bg-indigo-600 text-white font-black rounded-2xl shadow-xl hover:bg-indigo-700 transition-all active:scale-95 flex items-center justify-center space-x-2"
-                >
-                  <i className="fa-solid fa-key text-xs"></i>
-                  <span>Select Paid Project Key</span>
-                </button>
-              )}
             </div>
           )}
 
-          {!error && needsKeySelection && (
-             <div className="p-6 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-[32px] flex flex-col items-center text-center">
-                <i className="fa-solid fa-circle-info text-indigo-500 mb-3 text-xl"></i>
-                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Onboarding Needed</p>
-                <p className="text-xs text-slate-500 mt-1 mb-4">You need to select a paid project key to use background removal.</p>
-                <button 
-                  onClick={handleOpenKeySelection}
-                  className="w-full py-3 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 rounded-xl text-xs font-black text-indigo-600 dark:text-indigo-400 shadow-sm hover:shadow-md transition-all"
-                >
-                  Connect Key
-                </button>
-             </div>
-          )}
-
           <div className="relative group rounded-[32px] overflow-hidden bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 aspect-video flex items-center justify-center shadow-inner">
-            <div className="absolute inset-0 opacity-10 dark:opacity-5 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#000 10%, transparent 10%)', backgroundSize: '10px 10px' }}></div>
+            {/* Checkerboard background for transparency preview */}
+            <div className="absolute inset-0 opacity-[0.05] dark:opacity-[0.1] pointer-events-none" style={{ backgroundImage: 'conic-gradient(#000 0.25turn, #fff 0.25turn 0.5turn, #000 0.5turn 0.75turn, #fff 0.75turn)', backgroundSize: '20px 20px' }}></div>
             
             {isProcessing && (
                <div className="absolute inset-0 flex flex-col items-center justify-center z-30 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md">
                   <div className="w-20 h-20 border-4 border-indigo-500/10 border-t-indigo-500 rounded-full animate-spin"></div>
-                  <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mt-6 animate-pulse">Scanning Subject...</p>
+                  <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mt-6 animate-pulse">Processing Subject...</p>
                </div>
             )}
-            
             <img src={resultUrl || previewUrl!} className={`max-w-full max-h-full object-contain p-4 transition-all duration-1000 ${isProcessing ? 'scale-95 blur-sm opacity-50' : 'scale-100'}`} alt="Preview" />
             
             {!isProcessing && (
@@ -290,39 +213,39 @@ const BackgroundRemover: React.FC = () => {
             )}
           </div>
 
-          {!isDone && !isProcessing && !needsKeySelection && !error && (
+          {!isDone && !isProcessing && !error && (
             <button 
               onClick={handleRemoveBackground} 
-              className="group w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-black py-6 rounded-[32px] shadow-2xl shadow-indigo-500/30 transition-all hover:scale-[1.02] relative overflow-hidden"
+              className="group w-full bg-gradient-to-r from-indigo-600 to-primary-500 hover:from-indigo-700 hover:to-primary-600 text-white font-black py-6 rounded-[32px] shadow-2xl shadow-indigo-500/30 transition-all hover:scale-[1.02] relative overflow-hidden"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
-              <div className="flex items-center justify-center space-x-4">
-                <i className="fa-solid fa-scissors text-lg group-hover:rotate-12 transition-transform"></i> 
-                <span className="text-lg">Remove Background Now</span>
-              </div>
+               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+               <div className="flex items-center justify-center space-x-4">
+                 <i className="fa-solid fa-scissors text-lg group-hover:rotate-12 transition-transform"></i> 
+                 <span className="text-lg">Remove Background Now</span>
+               </div>
             </button>
           )}
 
           {isDone && (
-            <div className="bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/30 rounded-[48px] p-10 animate-in zoom-in-95 duration-500">
-              <div className="flex items-center justify-between mb-8 text-indigo-700 dark:text-indigo-400 font-black text-2xl">
-                <div className="flex items-center">
-                  <div className="w-14 h-14 bg-indigo-500 rounded-2xl flex items-center justify-center text-white mr-5 shadow-2xl shadow-indigo-500/20">
+            <div className="bg-green-50 dark:bg-green-900/10 border border-green-100 dark:border-green-900/30 rounded-[40px] p-10 animate-in zoom-in-95 duration-500">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center text-green-700 dark:text-green-400 font-black text-2xl">
+                  <div className="w-12 h-12 bg-green-500 rounded-2xl flex items-center justify-center text-white mr-4 shadow-xl shadow-green-500/20">
                     <i className="fa-solid fa-check text-xl"></i>
                   </div>
-                  Subject Isolated
+                  Success!
                 </div>
               </div>
               
-              <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-4">
                 <div className="flex gap-4">
-                  <button onClick={clear} className="px-8 py-6 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-black rounded-[28px] border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-all shadow-sm">
+                  <button onClick={clear} className="px-6 py-5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-black rounded-[24px] border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-all shadow-sm">
                     <i className="fa-solid fa-rotate-left"></i>
                   </button>
                   <a 
                     href={resultUrl!} 
-                    download={`lama_nobg_${selectedFile.name.split('.')[0]}.png`} 
-                    className="flex-grow text-center bg-indigo-600 text-white font-black py-6 rounded-[28px] shadow-2xl shadow-indigo-500/30 hover:scale-[1.02] hover:bg-indigo-700 transition-all flex items-center justify-center space-x-3 text-lg"
+                    download={`NoBG_${selectedFile.name.split('.')[0]}.png`} 
+                    className="flex-grow text-center bg-indigo-600 text-white font-black py-5 rounded-[24px] shadow-2xl shadow-indigo-500/30 hover:scale-[1.02] hover:bg-indigo-700 transition-all flex items-center justify-center space-x-3 text-lg"
                   >
                     <i className="fa-solid fa-download"></i>
                     <span>Download PNG</span>
@@ -332,10 +255,10 @@ const BackgroundRemover: React.FC = () => {
                   <button 
                     onClick={handleSaveToLibrary} 
                     disabled={isSaved || isSaving} 
-                    className={`w-full py-5 rounded-[24px] font-black text-sm transition-all flex items-center justify-center space-x-2 ${isSaved ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-slate-800 dark:bg-slate-700 text-white hover:bg-black shadow-xl'}`}
+                    className={`w-full py-4 rounded-[20px] font-black text-sm transition-all flex items-center justify-center space-x-2 ${isSaved ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-slate-800 dark:bg-slate-700 text-white hover:bg-black shadow-xl'}`}
                   >
                     {isSaving ? <i className="fa-solid fa-spinner animate-spin"></i> : <i className={`fa-solid ${isSaved ? 'fa-check' : 'fa-cloud-arrow-up'}`}></i>}
-                    <span>{isSaved ? 'Saved to Cloud' : isSaving ? 'Uploading Assets...' : 'Save to My Library'}</span>
+                    <span>{isSaved ? 'Saved to Library' : isSaving ? 'Uploading...' : 'Save to My Library'}</span>
                   </button>
                 )}
               </div>

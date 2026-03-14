@@ -30,7 +30,10 @@ const Home: React.FC = () => {
         .order('created_at', { ascending: false })
         .limit(6);
 
-      if (error) throw error;
+      if (error) {
+        setReviews(curatedReviews);
+        return;
+      }
 
       if (data && data.length > 0) {
         setReviews(data as Review[]);
@@ -38,7 +41,7 @@ const Home: React.FC = () => {
         setReviews(curatedReviews);
       }
     } catch (err) {
-      console.error('Error fetching reviews:', err);
+      // Silently fallback to curated reviews if network/Supabase fails
       setReviews(curatedReviews);
     }
   };
@@ -129,12 +132,12 @@ const Home: React.FC = () => {
             >
               <i className="fa-solid fa-wand-magic-sparkles mr-2 text-amber-500"></i> AI Enhancer
             </button>
-            <button 
-              onClick={() => scrollToTool('remove-bg')}
+            <Link 
+              to="/remove-bg"
               className="group w-full sm:w-auto px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-xl shadow-indigo-500/20 flex items-center justify-center transition-all hover:scale-105 active:scale-95"
             >
               <i className="fa-solid fa-scissors mr-2"></i> Remove BG
-            </button>
+            </Link>
           </div>
         </div>
       </section>

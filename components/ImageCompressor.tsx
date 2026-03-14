@@ -1,13 +1,13 @@
 
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import imageCompression from 'browser-image-compression';
 
 const ImageCompressor: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [compressedBlob, setCompressedBlob] = useState<Blob | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [quality, setQuality] = useState(80);
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -34,7 +34,6 @@ const ImageCompressor: React.FC = () => {
       setPreviewUrl(URL.createObjectURL(file));
       setCompressedBlob(null);
       setResult(null);
-      setProgress(0);
       setIsSaved(false);
     }
   };
@@ -42,38 +41,29 @@ const ImageCompressor: React.FC = () => {
   const compressImage = async () => {
     if (!selectedFile) return;
     setIsProcessing(true);
-    setProgress(20);
 
-    const img = new Image();
-    img.src = URL.createObjectURL(selectedFile);
-    
-    img.onload = () => {
-      setProgress(50);
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
+    try {
+      const options = {
+        maxSizeMB: 1,
+        maxWidthOrHeight: 1920,
+        useWebWorker: true,
+        initialQuality: quality / 100,
+      };
+
+      const compressedFile = await imageCompression(selectedFile, options);
       
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx?.drawImage(img, 0, 0);
-
-      setProgress(80);
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            setCompressedBlob(blob);
-            setResult({
-              originalSize: selectedFile.size,
-              compressedSize: blob.size,
-              ratio: Math.floor((1 - (blob.size / selectedFile.size)) * 100)
-            });
-          }
-          setProgress(100);
-          setIsProcessing(false);
-        },
-        'image/jpeg',
-        quality / 100
-      );
-    };
+      setCompressedBlob(compressedFile);
+      setResult({
+        originalSize: selectedFile.size,
+        compressedSize: compressedFile.size,
+        ratio: Math.floor((1 - (compressedFile.size / selectedFile.size)) * 100)
+      });
+    } catch (error) {
+      console.error('Compression error:', error);
+      alert('Failed to compress image.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleSaveToLibrary = async () => {
@@ -150,7 +140,6 @@ const ImageCompressor: React.FC = () => {
     setPreviewUrl(null);
     setCompressedBlob(null);
     setResult(null);
-    setProgress(0);
     setIsSaved(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -271,14 +260,13 @@ const ImageCompressor: React.FC = () => {
             <div className="space-y-6 py-4">
               <div className="h-4 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden p-1 shadow-inner">
                 <div 
-                  className="h-full bg-gradient-to-r from-primary-400 to-primary-600 rounded-full transition-all duration-300 relative" 
-                  style={{ width: `${progress}%` }}
+                  className="h-full bg-gradient-to-r from-primary-400 to-primary-600 rounded-full transition-all duration-300 relative w-1/2 animate-pulse" 
                 >
                   <div className="absolute inset-0 bg-[length:20px_20px] bg-gradient-to-r from-white/20 to-transparent animate-[shimmer_1s_infinite]"></div>
                 </div>
               </div>
               <p className="text-sm font-black text-center text-slate-500 tracking-wide uppercase">
-                Optimizing Pixels... {progress}%
+                Optimizing Pixels...
               </p>
             </div>
           )}

@@ -8,6 +8,7 @@ import Blog from './pages/Blog';
 import About from './pages/About';
 import Contact from './pages/Contact';
 import Library from './pages/Library';
+import RemoveBG from './pages/RemoveBG';
 import AdminReviews from './pages/AdminReviews';
 import NotFound from './pages/NotFound';
 import Post1 from './pages/blog/Post1';
@@ -55,6 +56,7 @@ const App: React.FC = () => {
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/library" element={<Library />} />
+            <Route path="/remove-bg" element={<RemoveBG />} />
             <Route path="/admin/reviews" element={<AdminReviews />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
