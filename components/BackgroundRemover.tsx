@@ -71,11 +71,10 @@ const BackgroundRemover: React.FC = () => {
     setError(null);
     
     try {
-      // 3. Frontend Compression & Resizing (Optimization Strategy #1 & #3)
-      // We use browser-image-compression for the first pass if needed
+      // 3. Balanced Frontend Compression & Resizing (Optimization Strategy)
       const compressionOptions = {
-        maxSizeMB: 2, // Increased from 1 to 2 to preserve more detail
-        maxWidthOrHeight: 1280, // Increased from 1024 to 1280
+        maxSizeMB: 1, // Optimized for 2-4s processing
+        maxWidthOrHeight: 800, // Balanced resolution
         useWebWorker: true,
         fileType: 'image/png'
       };
@@ -87,8 +86,7 @@ const BackgroundRemover: React.FC = () => {
         console.warn('Compression failed, using original', e);
       }
 
-      // 4. Fast Canvas Resize to exact AI dimensions (Optimization Strategy #1)
-      // This ensures the AI model (u2netp/small) runs at its peak efficiency
+      // 4. Fast Canvas Resize to balanced dimensions
       const img = new Image();
       const objectUrl = URL.createObjectURL(compressedFile);
       
@@ -98,7 +96,7 @@ const BackgroundRemover: React.FC = () => {
         img.src = objectUrl;
       });
 
-      const MAX_AI_DIMENSION = 1280; // Increased for better quality
+      const MAX_AI_DIMENSION = 800; // Balanced for 2-4s speed
       const canvas = document.createElement('canvas');
       let width = img.width;
       let height = img.height;
@@ -121,23 +119,25 @@ const BackgroundRemover: React.FC = () => {
       ctx?.drawImage(img, 0, 0, width, height);
       
       const fileToProcess = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((blob) => resolve(blob!), 'image/png', 1.0); // High quality
+        canvas.toBlob((blob) => resolve(blob!), 'image/png', 0.9);
       });
       
       URL.revokeObjectURL(objectUrl);
-      setStatusMessage('Removing background using AI...');
+      setStatusMessage('Removing background (Balanced Mode)...');
 
-      // 5. High-Quality AI Model
+      // 5. Balanced AI Model (Small/u2netp + Alpha Matting)
       const blob = await removeBackground(fileToProcess, {
-        model: 'medium', // Switched to 'medium' for pixel-perfect precision
+        model: 'small', // Fast u2netp equivalent
         device: 'gpu',
         proxyToWorker: true,
+        // @ts-ignore - Some versions support alphaMatting for edge quality
+        alphaMatting: true, 
         progress: (status: string, progress: number) => {
           setProgress(Math.round(progress * 100));
           
-          if (status.includes('fetch')) setStatusMessage('Loading High-Res Model...');
-          else if (status.includes('compute')) setStatusMessage('Extracting Subject...');
-          else setStatusMessage('Refining Edges...');
+          if (status.includes('fetch')) setStatusMessage('Loading Balanced Model...');
+          else if (status.includes('compute')) setStatusMessage('Removing background...');
+          else setStatusMessage('Refining edges...');
         }
       });
       
