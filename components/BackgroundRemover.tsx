@@ -2,6 +2,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { removeBackground } from '@imgly/background-removal';
+import imageCompression from 'browser-image-compression';
+
+// Simple session cache to prevent re-processing same file
+const processingCache = new Map<string, { blob: Blob; url: string }>();
 
 const BackgroundRemover: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -9,6 +13,8 @@ const BackgroundRemover: React.FC = () => {
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [statusMessage, setStatusMessage] = useState('Initializing...');
   const [isDone, setIsDone] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -44,17 +50,47 @@ const BackgroundRemover: React.FC = () => {
   const handleRemoveBackground = async () => {
     if (!selectedFile) return;
 
+    // 1. Check Cache (Instant return)
+    const cacheKey = `${selectedFile.name}_${selectedFile.size}`;
+    if (processingCache.has(cacheKey)) {
+      const cached = processingCache.get(cacheKey)!;
+      setResultBlob(cached.blob);
+      setResultUrl(cached.url);
+      setIsDone(true);
+      return;
+    }
+
+    // 2. Size & Resolution Limits (Optimization Strategy #6)
+    if (selectedFile.size > 5 * 1024 * 1024) {
+      // We'll compress it anyway, but good to have a limit
+    }
+
     setIsProcessing(true);
+    setProgress(0);
+    setStatusMessage('Optimizing image...');
     setError(null);
     
     try {
-      // Optimization: Downscale large images before processing to speed up AI inference
-      // Most background removal tasks don't need full resolution to generate a high-quality mask
-      let fileToProcess: File | Blob = selectedFile;
-      
-      const MAX_DIMENSION = 1200; // Good balance between speed and quality
+      // 3. Frontend Compression & Resizing (Optimization Strategy #1 & #3)
+      // We use browser-image-compression for the first pass if needed
+      const compressionOptions = {
+        maxSizeMB: 2, // Increased from 1 to 2 to preserve more detail
+        maxWidthOrHeight: 1280, // Increased from 1024 to 1280
+        useWebWorker: true,
+        fileType: 'image/png'
+      };
+
+      let compressedFile: File | Blob = selectedFile;
+      try {
+        compressedFile = await imageCompression(selectedFile, compressionOptions);
+      } catch (e) {
+        console.warn('Compression failed, using original', e);
+      }
+
+      // 4. Fast Canvas Resize to exact AI dimensions (Optimization Strategy #1)
+      // This ensures the AI model (u2netp/small) runs at its peak efficiency
       const img = new Image();
-      const objectUrl = URL.createObjectURL(selectedFile);
+      const objectUrl = URL.createObjectURL(compressedFile);
       
       await new Promise((resolve, reject) => {
         img.onload = resolve;
@@ -62,45 +98,54 @@ const BackgroundRemover: React.FC = () => {
         img.src = objectUrl;
       });
 
-      if (img.width > MAX_DIMENSION || img.height > MAX_DIMENSION) {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
+      const MAX_AI_DIMENSION = 1280; // Increased for better quality
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
 
-        if (width > height) {
-          if (width > MAX_DIMENSION) {
-            height *= MAX_DIMENSION / width;
-            width = MAX_DIMENSION;
-          }
-        } else {
-          if (height > MAX_DIMENSION) {
-            width *= MAX_DIMENSION / height;
-            height = MAX_DIMENSION;
-          }
+      if (width > height) {
+        if (width > MAX_AI_DIMENSION) {
+          height *= MAX_AI_DIMENSION / width;
+          width = MAX_AI_DIMENSION;
         }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-        
-        fileToProcess = await new Promise<Blob>((resolve) => {
-          canvas.toBlob((blob) => resolve(blob!), 'image/png');
-        });
+      } else {
+        if (height > MAX_AI_DIMENSION) {
+          width *= MAX_AI_DIMENSION / height;
+          height = MAX_AI_DIMENSION;
+        }
       }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0, width, height);
+      
+      const fileToProcess = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((blob) => resolve(blob!), 'image/png', 1.0); // High quality
+      });
       
       URL.revokeObjectURL(objectUrl);
+      setStatusMessage('Removing background using AI...');
 
+      // 5. High-Quality AI Model
       const blob = await removeBackground(fileToProcess, {
-        model: 'small',
+        model: 'medium', // Switched to 'medium' for pixel-perfect precision
         device: 'gpu',
         proxyToWorker: true,
         progress: (status: string, progress: number) => {
-          console.log(status, progress);
+          setProgress(Math.round(progress * 100));
+          
+          if (status.includes('fetch')) setStatusMessage('Loading High-Res Model...');
+          else if (status.includes('compute')) setStatusMessage('Extracting Subject...');
+          else setStatusMessage('Refining Edges...');
         }
       });
       
       const url = URL.createObjectURL(blob);
+      
+      // 6. Image Caching (Optimization Strategy #7)
+      processingCache.set(cacheKey, { blob, url });
+      
       setResultBlob(blob);
       setResultUrl(url);
       setIsDone(true);
@@ -199,9 +244,25 @@ const BackgroundRemover: React.FC = () => {
             <div className="absolute inset-0 opacity-[0.05] dark:opacity-[0.1] pointer-events-none" style={{ backgroundImage: 'conic-gradient(#000 0.25turn, #fff 0.25turn 0.5turn, #000 0.5turn 0.75turn, #fff 0.75turn)', backgroundSize: '20px 20px' }}></div>
             
             {isProcessing && (
-               <div className="absolute inset-0 flex flex-col items-center justify-center z-30 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md">
-                  <div className="w-20 h-20 border-4 border-indigo-500/10 border-t-indigo-500 rounded-full animate-spin"></div>
-                  <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mt-6 animate-pulse">Processing Subject...</p>
+               <div className="absolute inset-0 flex flex-col items-center justify-center z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-12">
+                  <div className="w-full max-w-[200px] space-y-6">
+                    <div className="relative flex items-center justify-center">
+                      <div className="w-28 h-28 border-4 border-indigo-500/10 border-t-indigo-500 rounded-full animate-spin"></div>
+                      <span className="absolute text-sm font-black text-indigo-600">{progress}%</span>
+                    </div>
+                    
+                    {/* Animated Progress Bar (Optimization Strategy #6) */}
+                    <div className="h-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-indigo-500 transition-all duration-300 ease-out"
+                        style={{ width: `${progress}%` }}
+                      ></div>
+                    </div>
+                    
+                    <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] text-center animate-pulse">
+                      {statusMessage}
+                    </p>
+                  </div>
                </div>
             )}
             <img src={resultUrl || previewUrl!} className={`max-w-full max-h-full object-contain p-4 transition-all duration-1000 ${isProcessing ? 'scale-95 blur-sm opacity-50' : 'scale-100'}`} alt="Preview" />

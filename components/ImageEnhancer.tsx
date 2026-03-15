@@ -10,6 +10,7 @@ const ImageEnhancer: React.FC = () => {
   const [enhancedUrl, setEnhancedUrl] = useState<string | null>(null);
   const [enhancedBlob, setEnhancedBlob] = useState<Blob | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [isInitializing, setIsInitializing] = useState(true);
   const [intensity, setIntensity] = useState(75);
   const [isDone, setIsDone] = useState(false);
@@ -125,7 +126,8 @@ const ImageEnhancer: React.FC = () => {
       const upscaledImage = await upscalerRef.current.upscale(imageToUpscale, {
         patchSize: 32, // Further reduced to 32 for maximum responsiveness
         padding: 2,
-        progress: async () => {
+        progress: async (amount: number) => {
+          setProgress(Math.round(amount * 100));
           // Use TensorFlow's native nextFrame to yield to the browser's UI thread
           await tf.nextFrame();
         }
@@ -268,7 +270,10 @@ const ImageEnhancer: React.FC = () => {
           <div className="relative group rounded-[32px] overflow-hidden bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 aspect-video flex items-center justify-center shadow-inner">
             {isProcessing && (
                <div className="absolute inset-0 flex flex-col items-center justify-center z-30 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md">
-                  <div className="w-20 h-20 border-4 border-amber-500/10 border-t-amber-500 rounded-full animate-spin"></div>
+                  <div className="relative flex items-center justify-center">
+                    <div className="w-24 h-24 border-4 border-amber-500/10 border-t-amber-500 rounded-full animate-spin"></div>
+                    <span className="absolute text-xs font-black text-amber-600">{progress}%</span>
+                  </div>
                   <p className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mt-6 animate-pulse">Neural Rendering...</p>
                </div>
             )}
